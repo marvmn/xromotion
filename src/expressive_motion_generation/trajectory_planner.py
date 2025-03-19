@@ -51,6 +51,9 @@ class TrajectoryPlanner:
         # apply to positions
         self.positions += (summands.T * parabola).T
 
+        # finally, scale down global scale a little
+        self.scale_global_speed(1.0 + max(amount / 2, 0.3))
+
     def get_position_at(self, timestamp, original=False):
         """
         Interpolates and returns the point at the specified timestamp (in seconds).
