@@ -24,7 +24,7 @@ group = moveit_commander.MoveGroupCommander(group_name)
 
 # create expressive planner
 planner = ExpressivePlanner(movegroup_commander=group)
-
+"""
 # try out a pose
 pose_goal = geometry_msgs.msg.Pose()
 pose_goal.orientation.w = 1.0
@@ -45,12 +45,13 @@ plt.plot(planner.trajectory_planner.times)
 plt.savefig("plot_tp_times")
 
 # go!
-planner.execute(original=False)
+#planner.execute(original=False)
+"""
 
+# try out animation
+from animation_execution import Animation
 
-# go back to ready state
-joint_goal = group.get_current_joint_values()
-constraints = group.get_known_constraints()
-print(constraints)
-#planner.trajectory_planner.positions = np.array([[0,0], []])
-#planner.plan_trajectory()
+anim = Animation("/home/mwiebe/noetic_ws/IsaacSim-ros_workspaces/noetic_ws/panda_animations/test_anim")
+planner.trajectory_planner = anim.trajectory_planner
+#print(planner.trajectory_planner.times)
+planner.execute()

@@ -79,7 +79,6 @@ class ExpressivePlanner:
             self.joint_state.header.stamp = rospy.get_rostime()
             self.joint_state.position = [0, 0] + self.trajectory_planner.get_position_at(
                 time.time() - time_start, original=original).tolist()
-            #print(joint_state.position)
             self.publisher.publish(self.joint_state)
             rate.sleep()
 

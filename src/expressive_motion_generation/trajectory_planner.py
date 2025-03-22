@@ -112,19 +112,24 @@ class TrajectoryPlanner:
         control points cp0 and cp1 across different joint states.
         """
 
+        # check if the two points are the same
+        if (self.times[index0] == self.times[index1]):
+            return
+
         # first, calculate the bezier curve with n points
         n = 20
 
         bezier_fn = lambda t: (1 - t)**3 * np.array([0,0]) + 3*(1 - t)**2 * t * cp0 + 3 * (1 - t) * t**2 * cp1 + t**3 * np.array([1,1])
         curve = bezier_fn(np.linspace([0,0], [1,1], n)).T
+        #print("CURVE:\n", curve)
 
         # now interpolate exact position for every timestamp
-        for idx in range(len(self.times)):
+        for idx in range(index1 - index0):
             
             # get x coordinate on the curve
             # for that normalize the times-intervall that this curve operates on
-            x = (self.times[idx] - self.times[index0]) / (self.times[index1] - self.times[index0])
-            time = 0
+            x = (self.times[index0 + idx] - self.times[index0]) / (self.times[index1] - self.times[index0])
+            time = 0.0
             if x == 0:
                 continue
             for i in range(len(curve[0])):
@@ -136,5 +141,43 @@ class TrajectoryPlanner:
                     break
             
             # finally apply calculated time back to times array
-            self.times[idx] = time * (self.times[index1] - self.times[index0]) + self.times[index0]
+            self.times[index0 + idx] = time * (self.times[index1] - self.times[index0]) + self.times[index0]
 
+    def fill_up(self, frequency):
+        """
+        Fills up the times and positions arrays with interpolated values so that the
+        resulting times are filled with a frequency of >frequency per second.
+        """
+        new_positions = copy.deepcopy(self.positions)
+        new_times = copy.deepcopy(self.times)
+
+        # go through every intervall and check if it satisfies the rate
+        added = 0
+        original_indices = []
+
+        for i in range(len(self.times) - 1):
+
+            original_indices.append(i + added)
+
+            intervall = self.times[i + 1] - self.times[i]
+
+            # if the intervall between these two timestamps it too big, it doesn't satisfy the rate
+            # that means new keyframes need to be inserted.
+            if intervall > 1/frequency:
+                
+                j_idx = 0
+                added_now = 0
+                while (j_idx + 1) * 1/frequency < intervall:
+                    new_times = np.insert(new_times, i + j_idx + added + 1, self.times[i] + 1/frequency * (j_idx + 1))
+                    new_positions = np.insert(new_positions, i + j_idx + added + 1, self.get_position_at(new_times[i+j_idx + added + 1]), axis=0)
+                    j_idx += 1
+                    added_now += 1
+                added += added_now
+        
+        # finally save new times and positions
+        self.positions = new_positions
+        self.times = new_times
+
+        # return the indices of the original keyframes
+        original_indices.append(added)
+        return original_indices
