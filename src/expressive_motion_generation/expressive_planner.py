@@ -38,6 +38,8 @@ class ExpressivePlanner:
 
         # command moveit to plan trajectory
         self.group.set_pose_target(pose_target)
+        plan = None
+
         plan_success, plan, planning_time, error_code = self.group.plan()
 
         # extract plan and initialize new trajectory planner

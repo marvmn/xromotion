@@ -5,6 +5,8 @@ import geometry_msgs
 import moveit_commander
 import moveit_msgs.msg
 import sys
+import numpy as np
+import matplotlib.pyplot as plt
 
 # initialize moveit 
 moveit_commander.roscpp_initialize(sys.argv)
@@ -33,8 +35,22 @@ pose_goal.position.z = 0.4
 planner.plan_trajectory(pose_target=pose_goal)
 
 # add modifications
-planner.trajectory_planner.add_uncertainty(0.08)
+#planner.trajectory_planner.add_uncertainty(0.08)
 planner.trajectory_planner.scale_global_speed(0.2)
+planner.trajectory_planner.apply_bezier_at(0, len(planner.trajectory_planner.times) - 1, np.array([0.5, 0]), np.array([0, 1]))
+
+# plot times
+plt.figure()
+plt.plot(planner.trajectory_planner.times)
+plt.savefig("plot_tp_times")
 
 # go!
 planner.execute(original=False)
+
+
+# go back to ready state
+joint_goal = group.get_current_joint_values()
+constraints = group.get_known_constraints()
+print(constraints)
+#planner.trajectory_planner.positions = np.array([[0,0], []])
+#planner.plan_trajectory()

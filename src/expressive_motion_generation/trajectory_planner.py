@@ -104,4 +104,37 @@ class TrajectoryPlanner:
         # interpolate position
         return pos0 + (pos1 - pos0) * scalar
 
+    def apply_bezier_at(self, index0, index1, cp0, cp1):
+        """
+        Scales the velocity of the motion between two keyframes according to
+        a Bézier curve. The curve assumes the position at index0 to be (0,0)
+        and the position at index1 to be (1,1) to unify the choice of the
+        control points cp0 and cp1 across different joint states.
+        """
+
+        # first, calculate the bezier curve with n points
+        n = 20
+
+        bezier_fn = lambda t: (1 - t)**3 * np.array([0,0]) + 3*(1 - t)**2 * t * cp0 + 3 * (1 - t) * t**2 * cp1 + t**3 * np.array([1,1])
+        curve = bezier_fn(np.linspace([0,0], [1,1], n)).T
+
+        # now interpolate exact position for every timestamp
+        for idx in range(len(self.times)):
+            
+            # get x coordinate on the curve
+            # for that normalize the times-intervall that this curve operates on
+            x = (self.times[idx] - self.times[index0]) / (self.times[index1] - self.times[index0])
+            time = 0
+            if x == 0:
+                continue
+            for i in range(len(curve[0])):
+                if x <= curve[0][i]:
+                    diff = curve[0, i] - curve[0, i - 1]
+                    prog = x - curve[0, i - 1]
+                    scal = prog / diff
+                    time = curve[1, i - 1] + (curve[1, i] - curve[1, i - 1]) * scal
+                    break
+            
+            # finally apply calculated time back to times array
+            self.times[idx] = time * (self.times[index1] - self.times[index0]) + self.times[index0]
 
