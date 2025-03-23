@@ -52,6 +52,8 @@ plt.savefig("plot_tp_times")
 from animation_execution import Animation
 
 anim = Animation("/home/mwiebe/noetic_ws/IsaacSim-ros_workspaces/noetic_ws/panda_animations/happy2")
+
 planner.trajectory_planner = anim.trajectory_planner
+planner.trajectory_planner.add_uncertainty(0.07)
 #print(planner.trajectory_planner.times)
 planner.execute()
