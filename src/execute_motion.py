@@ -1,5 +1,6 @@
 import expressive_motion_generation.trajectory_planner
 from expressive_motion_generation.expressive_planner import ExpressivePlanner
+from expressive_motion_generation.animation_execution import Animation
 import rospy
 import geometry_msgs
 import moveit_commander
@@ -49,7 +50,7 @@ plt.savefig("plot_tp_times")
 """
 
 # try out animation
-from animation_execution import Animation
+
 
 anim = Animation("/home/mwiebe/noetic_ws/IsaacSim-ros_workspaces/noetic_ws/panda_animations/happy2")
 
