@@ -71,13 +71,13 @@ class Animation:
 
         for i in range(len(data_points)):
             self.positions.append(data_points[i]["positions"])
-            self.times.append(data_points[i]["time_from_start"])
+            self.times.append(data_points[i]["time_from_start"]["data"])
         
         # load curves
         self.beziers = []
         data_curves = data["curves"]
 
         for i in range(len(data_curves)):
-            bezier = BezierCurve((data_curves["indices"][0], data_curves["indices"][1]), 
-                                 data_curves["control_point0"], data_curves["control_point1"])
+            bezier = BezierCurve((data_curves[i]["indices"][0], data_curves[i]["indices"][1]), 
+                                 data_curves[i]["control_point0"], data_curves[i]["control_point1"])
             self.beziers.append(bezier)

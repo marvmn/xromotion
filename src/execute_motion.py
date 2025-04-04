@@ -52,7 +52,7 @@ plt.savefig("plot_tp_times")
 # try out animation
 
 
-anim = Animation("/home/mwiebe/noetic_ws/IsaacSim-ros_workspaces/noetic_ws/panda_animations/happy2")
+anim = Animation("/home/mwiebe/noetic_ws/IsaacSim-ros_workspaces/noetic_ws/panda_animations/animation_happy.yaml")
 
 planner.trajectory_planner = anim.trajectory_planner
 planner.trajectory_planner.add_uncertainty(0.04)
