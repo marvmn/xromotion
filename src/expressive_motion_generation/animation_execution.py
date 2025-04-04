@@ -3,6 +3,13 @@ import json
 import os
 import numpy as np
 
+# yaml
+from yaml import load, dump
+try:
+    from yaml import CLoader as Loader, CDumper as Dumper
+except ImportError:
+    from yaml import Loader, Dumper
+
 class BezierCurve:
 
     def __init__(self, indices=(0.0, 0.0), control_point0=np.array([0.5, 0.5]), control_point1=np.array([0.5, 0.5])):
@@ -28,70 +35,49 @@ class Animation:
             return
         
         # read file and compute times and joint goals
-        times = []
-        positions = []
-        beziers = []
-
-        # parse 
-        positions_done = False
-        for line in file:
-            # skip empty lines
-            if not line:
-                continue
-
-            # check if end of positions was reached
-            if line == "CURVES\n":
-                positions_done = True
-                continue
-
-            parts = line.split("#")
-            
-            if positions_done:
-                # every curve line has the following structure:
-                # <index1>:<index2> # <control point 1> # <control point 2>
-                if not len(parts) == 3:
-                    print("WARNING: Line was skipped.")
-                    continue
-
-                # read parts
-                curve = BezierCurve(parts[0].split(':'), json.loads(parts[1]), json.loads(parts[2]))
-                curve.indices[0] = int(curve.indices[0])
-                curve.indices[1] = int(curve.indices[1])
-                beziers.append(curve)
-
-            else: 
-                # every position line has the following structure:
-                # <timestamp> # <joint positions> 
-                if not len(parts) == 2:
-                    print("WARNING: Line was skipped.")
-                    continue
-
-                # read parts
-                positions.append(json.loads(parts[1]))
-                times.append(float(parts[0]))
+        self._load_yaml(file)
         
         # apply to trajectory planner
-        self.trajectory_planner = TrajectoryPlanner(np.array(times), np.array(positions))
+        self.trajectory_planner = TrajectoryPlanner(np.array(self.times), np.array(self.positions))
 
         # fill up to make bezier curves possible
         original_indices = self.trajectory_planner.fill_up(20)
 
-        import matplotlib.pyplot as plt
-        plt.plot(self.trajectory_planner.times, self.trajectory_planner.positions)
-        plt.savefig("anim_shit_orig")
-
         # go through beziers and add them to trajectory
-        for i in range(len(beziers)):
-            curve = beziers[i]
+        for i in range(len(self.beziers)):
+            curve = self.beziers[i]
             self.trajectory_planner.apply_bezier_at(original_indices[curve.indices[0]], 
                                                     original_indices[curve.indices[1]], 
                                                     curve.control_point0, curve.control_point1)
         
-        plt.figure()
-        plt.plot(self.trajectory_planner.times, self.trajectory_planner.positions)
-        plt.savefig("anim_shit")
-
-        self.trajectory_planner.scale_global_speed(1.5)
-
         # finally close file
         file.close()
+
+    def _load_yaml(self, file):
+        """
+        Load an animation file (YAML format)
+        """
+        data = load(file, Loader=Loader)
+
+        # load data
+        self.name = data["header"]["animation_name"]
+        self.joint_names = data["trajectory"]["joint_names"]
+        self.frame_id = data["trajectory"]["header"]["frame_id"]
+
+        # load trajectory
+        self.positions = []
+        self.times = []
+        data_points = data["trajectory"]["points"]
+
+        for i in range(len(data_points)):
+            self.positions.append(data_points[i]["positions"])
+            self.times.append(data_points[i]["time_from_start"])
+        
+        # load curves
+        self.beziers = []
+        data_curves = data["curves"]
+
+        for i in range(len(data_curves)):
+            bezier = BezierCurve((data_curves["indices"][0], data_curves["indices"][1]), 
+                                 data_curves["control_point0"], data_curves["control_point1"])
+            self.beziers.append(bezier)
