@@ -41,13 +41,13 @@ class Animation:
         self.trajectory_planner = TrajectoryPlanner(np.array(self.times), np.array(self.positions))
 
         # fill up to make bezier curves possible
-        original_indices = self.trajectory_planner.fill_up(20)
+        self.original_indices = self.trajectory_planner.fill_up(20)
 
         # go through beziers and add them to trajectory
         for i in range(len(self.beziers)):
             curve = self.beziers[i]
-            self.trajectory_planner.apply_bezier_at(original_indices[curve.indices[0]], 
-                                                    original_indices[curve.indices[1]], 
+            self.trajectory_planner.apply_bezier_at(self.original_indices[curve.indices[0]], 
+                                                    self.original_indices[curve.indices[1]], 
                                                     curve.control_point0, curve.control_point1)
         
         # finally close file
@@ -61,6 +61,7 @@ class Animation:
 
         # load data
         self.name = data["header"]["animation_name"]
+        self.move_group = data["header"]["move_group"]
         self.joint_names = data["trajectory"]["joint_names"]
         self.frame_id = data["trajectory"]["header"]["frame_id"]
 
@@ -81,3 +82,11 @@ class Animation:
             bezier = BezierCurve((data_curves[i]["indices"][0], data_curves[i]["indices"][1]), 
                                  data_curves[i]["control_point0"], data_curves[i]["control_point1"])
             self.beziers.append(bezier)
+        
+        # convert to numpy arrays
+        self.positions = np.array(self.positions)
+        self.times = np.array(self.times)
+        self.beziers = np.array(self.beziers)
+
+    def save_yaml(self, file):
+        pass
