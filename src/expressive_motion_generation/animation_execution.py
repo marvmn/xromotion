@@ -109,6 +109,11 @@ class Animation:
         self.positions = np.insert(self.positions, index, positions, axis=0)
 
         # adjust bezier curve indices
+        for bezier in self.beziers:
+            if bezier.indices[0] >= index:
+                bezier.indices = (bezier.indices[0] + 1, bezier.indices[1] + 1)
+            elif bezier.indices[1] >= index:
+                bezier.indices = (bezier.indices[0], bezier.indices[1] + 1)
 
         # reload trajectory
         self._reload_trajectory()
