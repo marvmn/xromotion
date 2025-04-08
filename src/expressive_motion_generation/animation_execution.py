@@ -38,7 +38,18 @@ class Animation:
         self._load_yaml(file)
         
         # apply to trajectory planner
-        self.trajectory_planner = TrajectoryPlanner(np.array(self.times), np.array(self.positions))
+        self._reload_trajectory()
+        
+        # finally close file
+        file.close()
+
+    def _reload_trajectory(self):
+        """
+        Load trajectory planner and apply bezier curves
+        """
+
+        # load trajectory planner
+        self.trajectory_planner = TrajectoryPlanner(self.times, self.positions)
 
         # fill up to make bezier curves possible
         self.original_indices = self.trajectory_planner.fill_up(20)
@@ -50,8 +61,6 @@ class Animation:
                                                     self.original_indices[curve.indices[1]], 
                                                     curve.control_point0, curve.control_point1)
         
-        # finally close file
-        file.close()
 
     def _load_yaml(self, file):
         """
@@ -87,6 +96,21 @@ class Animation:
         self.positions = np.array(self.positions)
         self.times = np.array(self.times)
         self.beziers = np.array(self.beziers)
+    
+    def add_keyframe(self, time, positions):
+        """
+        Add a keyframe with the given position at the specified time
+        """
+        # search correct position
+        index = np.searchsorted(self.times, time)
+
+        # insert values
+        self.times.insert(index, time)
+        self.positions.insert(index, positions)
+
+        # reload trajectory
+        self._reload_trajectory()
+        
 
     def save_yaml(self, file):
         pass
