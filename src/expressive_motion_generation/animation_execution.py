@@ -105,8 +105,10 @@ class Animation:
         index = np.searchsorted(self.times, time)
 
         # insert values
-        self.times.insert(index, time)
-        self.positions.insert(index, positions)
+        self.times = np.insert(self.times, index, time)
+        self.positions = np.insert(self.positions, index, positions, axis=0)
+
+        # adjust bezier curve indices
 
         # reload trajectory
         self._reload_trajectory()
