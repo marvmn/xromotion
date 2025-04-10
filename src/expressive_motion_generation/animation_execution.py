@@ -3,6 +3,10 @@ import json
 import os
 import numpy as np
 
+# messages
+from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
+from std_msgs.msg import Duration
+
 # yaml
 from yaml import load, dump
 try:
@@ -120,4 +124,39 @@ class Animation:
         
 
     def save_yaml(self, file):
-        pass
+        """
+        Save the animation data as in YAML format in the specified file
+        """
+
+        # save everything in a dictionary
+        data = {}
+
+        # save animation header
+        data['header'] = {'animation_name': self.name,
+                          'move_group': self.move_group}
+        
+        # save trajectory
+        trajectory = JointTrajectory(joint_names=self.joint_names)
+        trajectory.header.frame_id = self.frame_id
+
+        for i in range(len(self.positions)):
+            point = JointTrajectoryPoint()
+            point.time_from_start = Duration(self.times[i])
+            point.positions = self.positions[i].tolist()
+            trajectory.points.append(point)
+        
+        data['trajectory'] = load(str(trajectory), Loader=Loader)
+
+        # save curves
+        data['curves'] = []
+
+        for bezier in self.beziers:
+            data['curves'].append({'control_point0': bezier.control_point0,
+                                   'control_point1': bezier.control_point1,
+                                   'indices': bezier.indices})
+        
+        # finished building dictionary, now save this in the yaml file
+        print(dump(data), file=file)
+
+
+
