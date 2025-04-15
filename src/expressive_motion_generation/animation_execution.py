@@ -29,23 +29,37 @@ class Animation:
 
     def __init__(self, animation_path):
         """
-        Initializes and loads animation from the specified path
+        Initializes and loads animation from the specified path if not None
         """
-        file = None
-        try:
-            file = open(os.path.join(os.getcwd(), animation_path), "r")
-        except:
-            print("ERROR: File " + os.path.join(os.getcwd(), animation_path) + " could not be opened.")
-            return
-        
-        # read file and compute times and joint goals
-        self._load_yaml(file)
-        
-        # apply to trajectory planner
-        self._reload_trajectory()
-        
-        # finally close file
-        file.close()
+
+        if animation_path is None:
+            self.name = ''
+            self.move_group = ''
+            self.joint_names = ''
+            self.frame_id = ''
+            self.times = np.array([])
+            self.positions = np.array([])
+            self.beziers = []
+
+            # apply to trajectory planner
+            self._reload_trajectory()
+
+        else:
+            file = None
+            try:
+                file = open(os.path.join(os.getcwd(), animation_path), "r")
+            except:
+                print("ERROR: File " + os.path.join(os.getcwd(), animation_path) + " could not be opened.")
+                return
+            
+            # read file and compute times and joint goals
+            self._load_yaml(file)
+            
+            # apply to trajectory planner
+            self._reload_trajectory()
+            
+            # finally close file
+            file.close()
 
     def _reload_trajectory(self):
         """
@@ -64,7 +78,6 @@ class Animation:
             self.trajectory_planner.apply_bezier_at(self.original_indices[curve.indices[0]], 
                                                     self.original_indices[curve.indices[1]], 
                                                     curve.control_point0, curve.control_point1)
-        
 
     def _load_yaml(self, file):
         """
