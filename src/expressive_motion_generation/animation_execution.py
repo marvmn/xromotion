@@ -112,7 +112,6 @@ class Animation:
         # convert to numpy arrays
         self.positions = np.array(self.positions)
         self.times = np.array(self.times)
-        self.beziers = np.array(self.beziers)
     
     def add_keyframe(self, time, positions):
         """
