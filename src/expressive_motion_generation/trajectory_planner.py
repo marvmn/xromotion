@@ -34,22 +34,23 @@ class TrajectoryPlanner:
         for i in range(len(self.times)):
             self.times[i] = self.times[i] * scalar
     
-    def add_uncertainty(self, amount=0.3):
+    def add_jitter(self, amount=0.05):
         """
         Applies a certain amount of randomness to a motion to make it seem
-        less confidant. The randomness is scaled down at the beginning and
+        less confident. The randomness is scaled down at the beginning and
         the end to avoid conflicts with the functional objective.
         """
 
         # first, generate random summands for every position
         summands = np.random.normal(0.0, amount, self.positions.shape)
 
-        # scale the summands over time according to a parabola
+        # make the effect fade in and out at the beginning and end of the motion
         # to ensure that the start and end point of the motion stay the same
-        parabola = -0.01 * (self.times + 0.0) * (self.times - self.times[len(self.times) - 1])
+        parabola = -0.05 * self.times[-1] * self.times * (self.times - self.times[-1])
+        cut = np.min([np.ones(parabola.shape), parabola], axis=0)
         
         # apply to positions
-        self.positions += (summands.T * parabola).T
+        self.positions += (summands.T * cut).T
 
         # finally, scale down global scale a little
         self.scale_global_speed(1.0 + max(amount / 2, 0.3))

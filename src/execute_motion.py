@@ -52,10 +52,9 @@ plt.savefig("plot_tp_times")
 # try out animation
 
 
-anim = Animation("/home/mwiebe/noetic_ws/IsaacSim-ros_workspaces/noetic_ws/panda_animations/animation_happy.yaml")
+anim = Animation("/home/mwiebe/noetic_ws/IsaacSim-ros_workspaces/noetic_ws/panda_animations/animation_happy2.yaml")
 
 planner.trajectory_planner = anim.trajectory_planner
-planner.trajectory_planner.add_uncertainty(0.04)
-planner.trajectory_planner.scale_global_speed(0.7)
+planner.trajectory_planner.add_jitter(0.05)
 #print(planner.trajectory_planner.times)
 planner.execute()
