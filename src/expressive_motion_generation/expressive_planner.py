@@ -16,7 +16,7 @@ class TargetPlan:
         self.target = target
         self.target_type = target_type
         self.move_group = move_group
-        self.effects = []
+        self.effects = {}
 
 class ExpressivePlanner:
 
@@ -82,21 +82,27 @@ class ExpressivePlanner:
         """
         Apply given effects to the plan part at the given index.
         If no index is given, the last plan element is chosen.
+        Instead of an index, a trajectory planner can also be given.
         
         Possible effects:
         jitter=<jitter amount>
         """
-
-        # apply jitter if given
-        if 'jitter' in kwargs.keys():
-            
+        if type(index) == int:
             # if the chosen element is an Animation, use the embedded trajectory planner and apply effect
             if type(self.plan[index]) == Animation:
-                self.plan[index].trajectory_planner.add_jitter(kwargs['jitter'])
+                trajectory_planner = self.plan[index].trajectory_planner
 
             # otherwise this is a TargetPlan, so add this effect for future computing
             else:
-                self.plan[index].effects.append(('jitter', kwargs["jitter"]))
+                self.plan[index].effects = kwargs
+                return
+        else:
+            trajectory_planner = index
+
+        # apply jitter if given
+        if 'jitter' in kwargs.keys():
+            trajectory_planner.add_jitter(kwargs['jitter'])
+
                 
     def bake(self):
         """
@@ -124,6 +130,10 @@ class ExpressivePlanner:
                     start_state.joint_state.name = self.robot.get_group(element.move_group).get_active_joints()
                 
                 trajectory_planner = self.plan_trajectory(element.target, element.move_group, element.target_type, start_state)
+
+                # apply effects!
+                self.apply_effects(trajectory_planner, **element.effects)
+
                 self.baked.append(trajectory_planner)
 
     def plan_trajectory(self, target, move_group, target_type, start_state=None):
@@ -193,9 +203,12 @@ class ExpressivePlanner:
                 
                 # otherwise plan the motion with moveit and execute it
                 else:
-                    self._execute_trajectory(self.plan_trajectory(element.target,
-                                                                  element.move_group,
-                                                                  element.target_type))
+                    trajectory_planner = self.plan_trajectory(element.target, element.move_group,
+                                                              element.target_type)
+                    
+                    self.apply_effects(trajectory_planner, **element.effects)
+
+                    self._execute_trajectory(trajectory_planner)
 
         # when everything is done, return True
         return True
