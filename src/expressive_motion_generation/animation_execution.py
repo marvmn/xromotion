@@ -187,6 +187,9 @@ class Animation:
     def set_joint_pointing_orientations(self, joint_names, joint_orientations):
         """
         Set the configuration of each joint given in joint_names that would
-        point the joint toward the point (0, 0, 0) in the base frame.
+        point the joint forward orthogonal to the previous joint.
         """
+        assert(len(joint_orientations) == len(joint_names))
+        for i in range(len(joint_names)):
+            self.joint_orientations[self.joint_names.index[joint_names[i]]] = joint_orientations[i]
 
