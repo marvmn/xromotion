@@ -24,7 +24,7 @@ robot = moveit_commander.RobotCommander()
 
 
 # create expressive planner
-planner = ExpressivePlanner(robot=robot)
+planner = ExpressivePlanner(robot=robot, publish_topic='display_robot_state', fake_display=True)
 
 # try out a pose
 pose_goal = geometry_msgs.msg.Pose()
@@ -61,8 +61,8 @@ plt.savefig("plot_tp_times")
 # planner.execute()
 
 planner.new_plan()
-planner.plan_animation("/home/mwiebe/noetic_ws/IsaacSim-ros_workspaces/noetic_ws/panda_animations/animation_happy2.yaml")
+planner.plan_animation("/home/mwiebe/Documents/Studium/ba/Animations/test_animation2.yaml")
 planner.plan_target(pose_goal, 'panda_arm')
 planner.apply_effects(jitter=0.05)
-# planner.bake()
+planner.bake()
 planner.execute()

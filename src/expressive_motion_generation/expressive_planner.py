@@ -2,7 +2,7 @@ import moveit_commander
 import numpy as np
 import rospy
 from sensor_msgs.msg import JointState
-from moveit_msgs.msg import RobotState
+from moveit_msgs.msg import RobotState, DisplayRobotState
 import time
 from expressive_motion_generation.trajectory_planner import TrajectoryPlanner
 from expressive_motion_generation.animation_execution import Animation
@@ -20,9 +20,12 @@ class TargetPlan:
 
 class ExpressivePlanner:
 
-    def __init__(self, robot: moveit_commander.RobotCommander, publish_topic='joint_command'):
+    def __init__(self, robot: moveit_commander.RobotCommander, publish_topic='joint_command', fake_display=False):
         """
         Expressive planning framework for functional and expressive animated robot motion.
+        Requires robot commander for the robot that should be controlled.
+        publish_topic specifies the ROS topic the joint states should be published to.
+        If fake_display is True, instead of joint states DisplayRobotState messages get published.
         """
 
         self.plan = []
@@ -31,12 +34,17 @@ class ExpressivePlanner:
         self.robot = robot
         self.frame_id = robot.get_planning_frame()
         self.joint_names = robot.get_active_joint_names()
+        self.fake_display = fake_display
+        self._last_trajectory_planner = None
 
         # initialize ros and moveit
         rospy.init_node("expressive_planner", anonymous=True)
 
         # initialize publisher
-        self.publisher = rospy.Publisher(publish_topic, JointState, queue_size=10)
+        if fake_display:
+            self.publisher = rospy.Publisher(publish_topic, DisplayRobotState, queue_size=10)
+        else:
+            self.publisher = rospy.Publisher(publish_topic, JointState, queue_size=10)
     
     def new_plan(self):
         """
@@ -44,6 +52,7 @@ class ExpressivePlanner:
         """
         self.plan = []
         self.baked = []
+        self._last_trajectory_planner = None
     
     def plan_animation(self, path):
         """
@@ -199,12 +208,24 @@ class ExpressivePlanner:
 
                 # if this element is an animation instance, use the provided trajectory planner
                 if type(element) == Animation:
+                    self._last_trajectory_planner = element.trajectory_planner
                     self._execute_trajectory(element.trajectory_planner)
                 
                 # otherwise plan the motion with moveit and execute it
                 else:
+                    
+                    # if fake execution is active, the actual robot was not moved, so the start state
+                    # has to be explicitly set
+                    start_state = None
+                    if self.fake_display and self._last_trajectory_planner is not None:
+                        last_position = self._last_trajectory_planner.positions[-1]
+                        start_state = RobotState()
+                        start_state.joint_state.position = last_position
+                        start_state.joint_state.name = self.robot.get_group(element.move_group).get_active_joints()
+                    
                     trajectory_planner = self.plan_trajectory(element.target, element.move_group,
-                                                              element.target_type)
+                                                              element.target_type, start_state)
+                    self._last_trajectory_planner = trajectory_planner
                     
                     self.apply_effects(trajectory_planner, **element.effects)
 
@@ -226,6 +247,10 @@ class ExpressivePlanner:
         joint_state = JointState()
         joint_state.name = self.joint_names
         joint_state.header.frame_id = self.frame_id
+        
+        if self.fake_display:
+            display = DisplayRobotState()
+            display.state.joint_state = joint_state
 
         # if not all joint names are used, remove them from the message
 
@@ -244,5 +269,8 @@ class ExpressivePlanner:
                 joint_state.position += [0] * (len(joint_state.name) - len(joint_state.position))
                 
             # publish and wait for next tick
-            self.publisher.publish(joint_state)
+            if self.fake_display:
+                self.publisher.publish(display)
+            else:
+                self.publisher.publish(joint_state)
             rate.sleep()

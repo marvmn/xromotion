@@ -1,4 +1,0 @@
-uint8 index0
-uint8 index1
-geometry_msgs/Point control_point0
-geometry_msgs/Point control_point1
