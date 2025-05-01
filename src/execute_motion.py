@@ -24,7 +24,7 @@ robot = moveit_commander.RobotCommander()
 
 
 # create expressive planner
-planner = ExpressivePlanner(robot=robot)
+planner = ExpressivePlanner(robot=robot, publish_topic='display_robot_state', fake_display=True)
 
 # try out a pose
 pose_goal = geometry_msgs.msg.Pose()
