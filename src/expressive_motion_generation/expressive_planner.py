@@ -9,13 +9,15 @@ from expressive_motion_generation.animation_execution import Animation
 
 class TargetPlan:
 
-    def __init__(self, target, move_group, target_type='pose'):
+    def __init__(self, target, move_group, target_type='pose', velocity_scaling=None, acceleration_scaling = None):
         """
         Saves a pose goal or joint goal and effects that should be applied.
         """
         self.target = target
         self.target_type = target_type
         self.move_group = move_group
+        self.velocity_scaling = velocity_scaling
+        self.acceleration_scaling = acceleration_scaling
         self.effects = {}
 
 class ExpressivePlanner:
@@ -52,7 +54,7 @@ class ExpressivePlanner:
         animation = Animation(path)
         self.plan.append(animation)
     
-    def plan_target(self, target, move_group=None):
+    def plan_target(self, target, move_group=None, velocity_scaling = None, acceleration_scaling = None):
         """
         Add planning a motion to a target pose or joint goal. If move_group is None,
         check if there exists another element in the plan. If so, choose the last used
@@ -74,7 +76,7 @@ class ExpressivePlanner:
                 move_group = self.robot.get_group_names()[0]
 
         # now that the move_group is set, add target to plan!
-        target_plan = TargetPlan(target, move_group)
+        target_plan = TargetPlan(target, move_group, velocity_scaling=velocity_scaling, acceleration_scaling=acceleration_scaling)
         self.plan.append(target_plan)
 
     
@@ -129,14 +131,15 @@ class ExpressivePlanner:
                     start_state.joint_state.position = last_position
                     start_state.joint_state.name = self.robot.get_group(element.move_group).get_active_joints()
                 
-                trajectory_planner = self.plan_trajectory(element.target, element.move_group, element.target_type, start_state)
+                trajectory_planner = self.plan_trajectory(element.target, element.move_group, element.target_type, start_state,
+                                                          element.velocity_scaling, element.acceleration_scaling)
 
                 # apply effects!
                 self.apply_effects(trajectory_planner, **element.effects)
 
                 self.baked.append(trajectory_planner)
 
-    def plan_trajectory(self, target, move_group, target_type, start_state=None):
+    def plan_trajectory(self, target, move_group, target_type, start_state=None, velocity_scaling=None, acceleration_scaling=None):
         """
         Uses MoveIt to compute a motion plan to a given pose target, then
         initialize a trajectory planner. If no custom start state is specified,
@@ -145,6 +148,12 @@ class ExpressivePlanner:
 
         if start_state is not None:
             self.robot.get_group(move_group).set_start_state(start_state)
+
+        if velocity_scaling is not None:
+            self.robot.get_group(move_group).set_max_velocity_scaling_factor(velocity_scaling)
+        
+        if acceleration_scaling is not None:
+            self.robot.get_group(move_group).set_max_acceleration_scaling_factor(acceleration_scaling)
         
         # set target
         if target_type == 'pose':
@@ -204,7 +213,9 @@ class ExpressivePlanner:
                 # otherwise plan the motion with moveit and execute it
                 else:
                     trajectory_planner = self.plan_trajectory(element.target, element.move_group,
-                                                              element.target_type)
+                                                              element.target_type,
+                                                              velocity_scaling=element.velocity_scaling,
+                                                              acceleration_scaling=element.acceleration_scaling)
                     
                     self.apply_effects(trajectory_planner, **element.effects)
 

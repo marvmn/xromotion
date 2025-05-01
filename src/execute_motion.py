@@ -28,10 +28,13 @@ planner = ExpressivePlanner(robot=robot)
 
 # try out a pose
 pose_goal = geometry_msgs.msg.Pose()
-pose_goal.orientation.w = 1.0
-pose_goal.position.x = 0.4
-pose_goal.position.y = 0.1
-pose_goal.position.z = 0.4
+# pose_goal.orientation.w = 0.0
+# pose_goal.orientation.x = 0.7
+# pose_goal.orientation.y = 0.1
+# pose_goal.orientation.z = 0.1
+pose_goal.position.x = 0.5
+pose_goal.position.y = 0.01
+pose_goal.position.z = 0.6
 
 """
 planner.plan_trajectory(pose_target=pose_goal)
@@ -62,7 +65,7 @@ plt.savefig("plot_tp_times")
 
 planner.new_plan()
 planner.plan_animation("/home/mwiebe/noetic_ws/IsaacSim-ros_workspaces/noetic_ws/panda_animations/animation_happy2.yaml")
-planner.plan_target(pose_goal, 'panda_arm')
-planner.apply_effects(jitter=0.05)
-# planner.bake()
+planner.plan_target(pose_goal, 'panda_arm', 1.0, 1.0)
+planner.apply_effects(index=1, jitter=0.01)
+planner.bake()
 planner.execute()
