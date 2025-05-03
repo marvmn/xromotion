@@ -63,7 +63,7 @@ class ExpressivePlanner:
         animation = Animation(path)
         self.plan.append(animation)
     
-    def plan_target(self, target, move_group=None, velocity_scaling = None, acceleration_scaling = None):
+    def plan_target(self, target, move_group=None, velocity_scaling = None, acceleration_scaling = None, target_type='pose'):
         """
         Add planning a motion to a target pose or joint goal. If move_group is None,
         check if there exists another element in the plan. If so, choose the last used
@@ -85,7 +85,8 @@ class ExpressivePlanner:
                 move_group = self.robot.get_group_names()[0]
 
         # now that the move_group is set, add target to plan!
-        target_plan = TargetPlan(target, move_group, velocity_scaling=velocity_scaling, acceleration_scaling=acceleration_scaling)
+        target_plan = TargetPlan(target, move_group, target_type=target_type, 
+                                 velocity_scaling=velocity_scaling, acceleration_scaling=acceleration_scaling)
         self.plan.append(target_plan)
 
     
@@ -157,6 +158,8 @@ class ExpressivePlanner:
 
         if start_state is not None:
             self.robot.get_group(move_group).set_start_state(start_state)
+        else:
+            self.robot.get_group(move_group).set_start_state(self.robot.get_group(move_group).get_current_state())
 
         if velocity_scaling is not None:
             self.robot.get_group(move_group).set_max_velocity_scaling_factor(velocity_scaling)
@@ -165,10 +168,13 @@ class ExpressivePlanner:
             self.robot.get_group(move_group).set_max_acceleration_scaling_factor(acceleration_scaling)
         
         # set target
+        print('[ExpressivePlanner]\t\tTARGET TYPE:', target_type)
         if target_type == 'pose':
             self.robot.get_group(move_group).set_pose_target(target)
         elif target_type == 'joint':
             self.robot.get_group(move_group).set_joint_value_target(target)
+        elif target_type == 'orientation':
+            self.robot.get_group(move_group).set_orientation_target(target)
         else:
             self.robot.get_group(move_group).set_position_target(target)
 
@@ -233,7 +239,7 @@ class ExpressivePlanner:
                         start_state.joint_state.name = self.robot.get_group(element.move_group).get_active_joints()
                     
                     trajectory_planner = self.plan_trajectory(element.target, element.move_group,
-                                                              element.target_type,
+                                                              element.target_type, start_state=start_state,
                                                               velocity_scaling=element.velocity_scaling,
                                                               acceleration_scaling=element.acceleration_scaling)
                     self._last_trajectory_planner = trajectory_planner

@@ -1,5 +1,7 @@
-import numpy as np
 import copy
+import numpy as np
+import tf.transformations
+from geometry_msgs.msg import Pose
 
 class TrajectoryPlanner:
 
@@ -54,6 +56,9 @@ class TrajectoryPlanner:
 
         # finally, scale down global scale a little
         self.scale_global_speed(1.0 + max(amount / 2, 0.3))
+
+    def add_gaze(self, point):
+        pass
 
     def get_position_at(self, timestamp, original=False):
         """
@@ -182,3 +187,98 @@ class TrajectoryPlanner:
         # return the indices of the original keyframes
         original_indices.append(added)
         return original_indices
+
+    def _get_pointing_pose(frame, point, axis=[0, 0, 1], up_vector=[1, 0, 0]):
+        """
+        Get end effector pose for pointing a axis in the link to a specific point in space.
+
+        Parameters:
+        - frame: Position of the end effector link
+        - point: Position of the point that the link should point towards
+        - axis: The axis that should point at the point
+        - up_vector: When pointing at the point, this axis will point as far upwards as possible.
+        """
+
+        # get direction vector
+        direction = np.array(point) - np.array(frame)
+        direction /= np.linalg.norm(direction)
+
+        # normalize axis
+        axis = np.array(axis) / np.linalg.norm(axis)
+
+        # align axis with end effector:
+
+        # get rotation axis: EEF can be rotated around axis orthogonal to both the direction vector and
+        # the axis vector, so calculate cross product
+        rotation_axis = np.cross(axis, direction)
+
+        # get rotation angle
+        angle = np.dot(axis, direction)
+
+        # if the norm of the cross product is (close to) zero, then axis and direction are already parallel
+        # in that case, check if they point in the same direction
+        if np.linalg.norm(rotation_axis) < 0.0001:
+            if angle > 0:
+                # they point in the same direction; no further transformation is needed
+                rotation_matrix = np.eye(3)
+            else:
+                # they point into opposite directions; rotate 180 degrees
+                # calculate orthogonal axis to rotate around
+                orthogonal = np.array([1, 0, 0])
+                if np.allclose(orthogonal, axis, atol=0.01):
+                    orthogonal = np.array([0, 1, 0])
+                orthogonal = np.cross(axis, orthogonal)
+                orthogonal /= np.linalg.norm(orthogonal)
+
+                # build rotation matrix (see Rodrigues' rotation formula)
+                skew_mat = np.array([[0, -orthogonal[2], orthogonal[1]],
+                                    [orthogonal[2], 0, -orthogonal[0]],
+                                    [-orthogonal[1], orthogonal[0], 0]])
+                rotation_matrix = np.eye(3) + np.sin(np.pi) * skew_mat \
+                                + (1 - np.cos(np.pi)) * (skew_mat @ skew_mat)
+        else:
+            # if axes are not aligned, rotate
+            skew_mat = np.array([[0, -rotation_axis[2], rotation_axis[1]],
+                                [rotation_axis[2], 0, -rotation_axis[0]],
+                                [-rotation_axis[1], rotation_axis[0], 0]])
+            rotation_matrix = np.eye(3) + skew_mat + skew_mat@skew_mat * \
+                            ((1 - angle) / np.linalg.norm(rotation_axis)**2)
+        
+        # rotate up vector
+        up_vector = rotation_matrix @ up_vector
+
+        # use Gram-Schmidt process to build frame, where the z axis is the direction axis
+        # and the y axis points up (as far as possible)
+        up_world_vector = np.array([0, 0, 1])
+        
+        # calculate angle between up_vector and up_world_vector
+        angle = np.arccos(np.clip(np.dot(up_vector, up_world_vector), -1.0, 1.0))
+
+        # if dot product of the rotation axis and the cross product of up_vector and up_world_vector
+        # is negative, the rotation needs to be inverted
+        if np.dot(np.cross(up_vector, up_world_vector), direction) < 0:
+            angle *= -1
+        
+        # build rotation matrix to align the pointing frame better with the up vector
+        skew_mat = np.array([[0, -direction[2], direction[1]],
+                                [direction[2], 0, -direction[0]],
+                                [-direction[1], direction[0], 0]])
+        up_rotation_matrix = np.eye(3) + np.sin(angle) * skew_mat \
+                            + (1 - np.cos(angle)) * (skew_mat @ skew_mat)
+
+        # build final rotation matrix
+        final_rotation = np.eye(4)
+        final_rotation[:3, :3] = up_rotation_matrix @ rotation_matrix
+        quaternion = tf.quaternion_from_matrix(final_rotation)
+
+        pose = Pose()
+        pose.position.x = frame[0]
+        pose.position.y = frame[1]
+        pose.position.z = frame[2]
+        pose.orientation.x = quaternion[0]
+        pose.orientation.y = quaternion[1]
+        pose.orientation.z = quaternion[2]
+        pose.orientation.w = quaternion[3]
+
+        return pose
+

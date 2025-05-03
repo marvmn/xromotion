@@ -15,24 +15,17 @@ moveit_commander.roscpp_initialize(sys.argv)
 # instantiate Robot Commander
 robot = moveit_commander.RobotCommander()
 
-# # instantiate planning scene interface
-# scene = moveit_commander.PlanningSceneInterface()
-
-# # instantiate movegroupcommander
-# group_name = "panda_arm"
-# group = moveit_commander.MoveGroupCommander(group_name)
-
-
 # create expressive planner
-planner = ExpressivePlanner(robot=robot, publish_topic='display_robot_state', fake_display=True)
+planner = ExpressivePlanner(robot=robot, publish_topic='joint_command', fake_display=False)
+robot.get_group('panda_arm').set_end_effector_link('panda_hand')
 
 # try out a pose
 pose_goal = geometry_msgs.msg.Pose()
-# pose_goal.orientation.w = 0.0
-# pose_goal.orientation.x = 0.7
-# pose_goal.orientation.y = 0.1
-# pose_goal.orientation.z = 0.1
-pose_goal.position.x = 0.5
+pose_goal.orientation.w = 0.0
+pose_goal.orientation.x = 0.0
+pose_goal.orientation.y = 0.0
+pose_goal.orientation.z = 1.0
+pose_goal.position.x = 0.4
 pose_goal.position.y = 0.01
 pose_goal.position.z = 0.6
 
@@ -55,17 +48,9 @@ plt.savefig("plot_tp_times")
 
 # try out animation
 
-
-# anim = Animation("/home/mwiebe/noetic_ws/IsaacSim-ros_workspaces/noetic_ws/panda_animations/animation_happy2.yaml")
-
-# planner.trajectory_planner = anim.trajectory_planner
-# planner.trajectory_planner.add_jitter(0.03)
-# #print(planner.trajectory_planner.times)
-# planner.execute()
-
 planner.new_plan()
 planner.plan_animation("/home/mwiebe/noetic_ws/IsaacSim-ros_workspaces/noetic_ws/panda_animations/animation_happy2.yaml")
-planner.plan_target(pose_goal, 'panda_arm', 1.0, 1.0)
+planner.plan_target(pose_goal, 'panda_arm', 1.0, 1.0, 'pose')
 planner.apply_effects(index=1, jitter=0.01)
 planner.bake()
 planner.execute()
