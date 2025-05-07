@@ -14,6 +14,7 @@ moveit_commander.roscpp_initialize(sys.argv)
 
 # instantiate Robot Commander
 robot = moveit_commander.RobotCommander()
+active_joints = robot.get_active_joint_names()
 
 # create expressive planner
 planner = ExpressivePlanner(robot=robot, publish_topic='joint_command', fake_display=False)
@@ -21,10 +22,10 @@ robot.get_group('panda_arm').set_end_effector_link('panda_hand')
 
 # try out a pose
 pose_goal = geometry_msgs.msg.Pose()
-pose_goal.orientation.w = 0.0
-pose_goal.orientation.x = 0.0
-pose_goal.orientation.y = 0.0
-pose_goal.orientation.z = 1.0
+pose_goal.orientation.w = -0.2
+pose_goal.orientation.x = -0.6
+pose_goal.orientation.y = -0.2
+pose_goal.orientation.z = -0.6
 pose_goal.position.x = 0.4
 pose_goal.position.y = 0.01
 pose_goal.position.z = 0.6
@@ -47,10 +48,17 @@ plt.savefig("plot_tp_times")
 """
 
 # try out animation
+active_joints.pop(6)
+active_joints.pop(4)
+active_joints.pop(2)
+print(f'MOVABLE: {active_joints}')
 
 planner.new_plan()
 planner.plan_animation("/home/mwiebe/noetic_ws/IsaacSim-ros_workspaces/noetic_ws/panda_animations/animation_happy2.yaml")
-planner.plan_target(pose_goal, 'panda_arm', 1.0, 1.0, 'pose')
-planner.apply_effects(index=1, jitter=0.01)
+gaze = {'point':[0.6, 0.0, 0.6], 'move_group':'panda_arm', 'link':'panda_hand', 'axis':[0,0,1], 'up':[1,0,0],
+        'movable': active_joints}
+planner.apply_effects(index=0, gaze=gaze)
+#planner.plan_target(pose_goal, 'panda_arm', 1.0, 1.0, 'pose')
+#planner.apply_effects(index=1, jitter=0.01)
 planner.bake()
 planner.execute()

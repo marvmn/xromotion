@@ -97,7 +97,10 @@ class ExpressivePlanner:
         Instead of an index, a trajectory planner can also be given.
         
         Possible effects:
-        jitter=<jitter amount>
+        - jitter=<jitter amount>
+        - gaze={'point'=<point position>, 'link'=<name of link to point>, 
+            'move_group'=<move group name>, axis'=<axis to point at point>, 
+            'up'=<up vector>}
         """
         if type(index) == int:
             # if the chosen element is an Animation, use the embedded trajectory planner and apply effect
@@ -111,9 +114,37 @@ class ExpressivePlanner:
         else:
             trajectory_planner = index
 
+        # apply gaze if given
+        if 'gaze' in kwargs.keys():
+
+            # get dictionary elements
+            gaze = kwargs['gaze']
+            point = gaze['point'] if 'point' in gaze.keys() else [2,0,0]
+            move_group = gaze['move_group'] if 'move_group' in gaze.keys() else self.robot.get_group_names()[0]
+            link = gaze['link'] if 'link' in gaze.keys() else \
+                self.robot.get_group(move_group).get_end_effector_link()
+            axis = gaze['axis'] if 'axis' in gaze.keys() else [0,0,1]
+            up = gaze['up'] if 'up' in gaze.keys() else [1,0,0]
+            movable = gaze['movable'] if 'movable' in gaze.keys() else self.robot.get_active_joint_names()
+            
+            # check again if this was an animation. If yes, it has been filled up,
+            # the gaze should be applied on the original keyframes.
+            if type(index) == int and type(self.plan[index]) == Animation:
+                new_trajectory_planner = TrajectoryPlanner(self.plan[index].times, self.plan[index].positions)
+
+                new_trajectory_planner.add_gaze(point, link, move_group, axis, up, movable)
+
+                self.plan[index].positions = new_trajectory_planner.positions
+                self.plan[index]._reload_trajectory()
+            
+            # if not, just apply
+            else:
+                trajectory_planner.add_gaze(point, link, move_group, axis, up)
+
         # apply jitter if given
         if 'jitter' in kwargs.keys():
             trajectory_planner.add_jitter(kwargs['jitter'])
+
 
                 
     def bake(self):

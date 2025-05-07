@@ -1,7 +1,11 @@
 import copy
+import rospy
 import numpy as np
-import tf.transformations
+import tf.transformations as tf
 from geometry_msgs.msg import Pose
+from moveit_msgs.msg import PositionIKRequest, Constraints, JointConstraint
+from moveit_commander.robot import RobotCommander
+from moveit_msgs.srv import GetPositionIKResponse, GetPositionFKRequest, GetPositionFK, GetPositionIK
 
 class TrajectoryPlanner:
 
@@ -22,6 +26,10 @@ class TrajectoryPlanner:
 
         # set positions that will be modified through expression transforms
         self.positions = copy.deepcopy(positions)
+
+        # indices of original positions in case the trajectory was filled up
+        # with interpolated values
+        self.original_indices = range(len(times))
 
         # When the last point of the trajectory is reached, done becomes True
         self.done = False
@@ -57,8 +65,37 @@ class TrajectoryPlanner:
         # finally, scale down global scale a little
         self.scale_global_speed(1.0 + max(amount / 2, 0.3))
 
-    def add_gaze(self, point):
-        pass
+    def add_gaze(self, point, link, move_group, axis=[0,0,1], up_vector=[1,0,0], movable_joints=None):
+        """
+        Makes the specified link point at the given point throughout the trajectory
+        
+        Parameters:
+        - point: Point to look at
+        - link: Name of the link that should look at the point. If None is given, use the end effector.
+        - move_group: Name of the move_group to use for the IK computation
+        - axis: The axis that should be pointed to the point
+        - up_vector: When pointing at the point, this axis will point as far upwards as possible.
+        """
+        
+        # prepare moveit robot interface
+        robot = RobotCommander()
+        group = robot.get_group(move_group)
+
+        # go through every keyframe
+        for i in self.original_indices:
+
+            # apply pointing pose
+            joint_state = self._get_pointing_joint_state(move_group, robot, i, link, point, axis, 
+                                                             up_vector, movable_joints)
+            self.positions[i] = np.zeros(self.positions[i].shape)
+            skipped = 0
+            for j in range(len(joint_state.name)):
+                if joint_state.name[j] in group.get_active_joints():
+                    self.positions[i,j - skipped] = joint_state.position[j]
+                else:
+                    skipped += 1
+
+            #self.positions[i] = joint_positions[0:-2] # TODO get joint names from move group and fix this
 
     def get_position_at(self, timestamp, original=False):
         """
@@ -159,11 +196,11 @@ class TrajectoryPlanner:
 
         # go through every intervall and check if it satisfies the rate
         added = 0
-        original_indices = []
+        self.original_indices = []
 
         for i in range(len(self.times) - 1):
 
-            original_indices.append(i + added)
+            self.original_indices.append(i + added)
 
             intervall = self.times[i + 1] - self.times[i]
 
@@ -185,10 +222,90 @@ class TrajectoryPlanner:
         self.times = new_times
 
         # return the indices of the original keyframes
-        original_indices.append(added)
-        return original_indices
+        self.original_indices.append(added)
+        return self.original_indices
 
-    def _get_pointing_pose(frame, point, axis=[0, 0, 1], up_vector=[1, 0, 0]):
+    def _get_pointing_joint_state(self, move_group: str, robot: RobotCommander, time, link, point, 
+                                  axis=[0,0,1], up_vector=[1, 0, 0], movable_joints=None):
+        """
+        Uses MoveIt's inverse kinematics to generate a joint state that lets the given link point
+        the axis at the given point.
+
+        Parameters:
+        - move_group: Name of the move group
+        - robot: RobotCommander with the commanded robot
+        - time: Index of the base position
+        - link: Name of the pointer link
+        - point: 3D Coordinates of the point to point at
+        - axis: Direction vector of the axis to point at the point
+        - up_vector: When pointing at the point, this axis will point as far upwards as possible.
+        - movable_joints: Joints that can be moved from the original state in order to reach pointing state
+        """
+
+        # prepare service caller and request
+        fk_service = rospy.ServiceProxy('/compute_fk', GetPositionFK)
+        ik_service = rospy.ServiceProxy('/compute_ik', GetPositionIK)
+
+        # build current robot state
+        current_pose = robot.get_current_state() 
+        current_pose.joint_state.position = np.zeros(len(current_pose.joint_state.position))
+        skipped = 0
+        for j in range(len(current_pose.joint_state.name)):
+            if current_pose.joint_state.name[j] in robot.get_group(move_group).get_active_joints():
+                current_pose.joint_state.position[j - skipped] = self.positions[time][j]
+            else:
+                skipped += 1
+
+        link_idx = robot.get_link_names().index(link)
+
+        # get position of end effector with FK
+        fk_request = GetPositionFKRequest()
+        fk_request.fk_link_names = robot.get_link_names()
+        fk_request.header.frame_id = current_pose.joint_state.header.frame_id
+        fk_request.robot_state = current_pose
+        fk_solution = fk_service(fk_request)
+
+        if not fk_solution.error_code.val == fk_solution.error_code.SUCCESS:
+            print(f"ERROR: Could not compute forward kinematics for time {time}. Error code {fk_solution.error_code}")
+            return current_pose.joint_state
+
+        pose = fk_solution.pose_stamped[link_idx]
+        position = np.array([pose.pose.position.x, pose.pose.position.y, pose.pose.position.z])
+
+        # build constraint message
+        constraints = Constraints()
+        constraints.name = "MoveableJointsConstraints"
+        if movable_joints is not None:
+            for joint in robot.get_active_joint_names():
+                if joint not in movable_joints and joint in robot.get_group(move_group).get_active_joints():
+                    joint_constraint = JointConstraint()
+                    joint_constraint.joint_name = joint
+                    joint_constraint.position = current_pose.joint_state.position[
+                        current_pose.joint_state.name.index(joint)
+                    ]
+                    joint_constraint.tolerance_above = 0.5
+                    joint_constraint.tolerance_below = 0.5
+                    joint_constraint.weight = 1
+                    constraints.joint_constraints.append(joint_constraint)
+
+        ik_request = PositionIKRequest()
+        ik_request.constraints = constraints
+        ik_request.group_name = move_group
+        ik_request.robot_state = current_pose
+        ik_request.ik_link_name = link
+        ik_request.pose_stamped = pose
+        ik_request.pose_stamped.pose = self._get_pointing_pose(position, point, axis, up_vector)
+        ik_solution: GetPositionIKResponse = ik_service(ik_request)
+
+        # check for errors
+        if not ik_solution.error_code.val == ik_solution.error_code.SUCCESS:
+            print(f"ERROR: No pointing pose found for time {time}. Error code {ik_solution.error_code}")
+            return current_pose.joint_state
+        else:
+            return ik_solution.solution.joint_state
+
+
+    def _get_pointing_pose(self, frame, point, axis=[0, 0, 1], up_vector=[1, 0, 0]):
         """
         Get end effector pose for pointing a axis in the link to a specific point in space.
 
