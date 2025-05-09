@@ -2,10 +2,20 @@ import copy
 import rospy
 import numpy as np
 import tf.transformations as tf
-from geometry_msgs.msg import Pose
-from moveit_msgs.msg import PositionIKRequest, Constraints, JointConstraint
+from sensor_msgs.msg import JointState
 from moveit_commander.robot import RobotCommander
+from moveit_msgs.msg import PositionIKRequest, Constraints, JointConstraint
 from moveit_msgs.srv import GetPositionIKResponse, GetPositionFKRequest, GetPositionFK, GetPositionIK
+
+# Stack of Tasks imports
+from stack_of_tasks.tasks.Eq_Tasks import *
+from stack_of_tasks.config import Configuration
+from stack_of_tasks.controller import Controller
+from stack_of_tasks.ref_frame import Origin, Offset
+from stack_of_tasks.solver.OSQPSolver import OSQPSolver
+from stack_of_tasks.ref_frame.frames import RobotRefFrame
+from stack_of_tasks.tasks.base import TaskSoftnessType, RelativeType
+from stack_of_tasks.robot_model.actuators import DummyActuator
 
 class TrajectoryPlanner:
 
@@ -87,15 +97,16 @@ class TrajectoryPlanner:
             # apply pointing pose
             joint_state = self._get_pointing_joint_state(move_group, robot, i, link, point, axis, 
                                                              up_vector, movable_joints)
-            self.positions[i] = np.zeros(self.positions[i].shape)
-            skipped = 0
-            for j in range(len(joint_state.name)):
-                if joint_state.name[j] in group.get_active_joints():
-                    self.positions[i,j - skipped] = joint_state.position[j]
-                else:
-                    skipped += 1
+            # self.positions[i] = np.zeros(self.positions[i].shape)
+            # skipped = 0
+            # for j in range(len(joint_state)):
+            #     if joint_state.name[j] in group.get_active_joints():
+            #         self.positions[i,j - skipped] = joint_state.position[j]
+            #     else:
+            #         skipped += 1
+            print(f'found gaze for state {i}. ')
 
-            #self.positions[i] = joint_positions[0:-2] # TODO get joint names from move group and fix this
+            self.positions[i] = joint_state
 
     def get_position_at(self, timestamp, original=False):
         """
@@ -242,160 +253,89 @@ class TrajectoryPlanner:
         - movable_joints: Joints that can be moved from the original state in order to reach pointing state
         """
 
-        # prepare service caller and request
-        fk_service = rospy.ServiceProxy('/compute_fk', GetPositionFK)
-        ik_service = rospy.ServiceProxy('/compute_ik', GetPositionIK)
-
         # build current robot state
-        current_pose = robot.get_current_state() 
-        current_pose.joint_state.position = np.zeros(len(current_pose.joint_state.position))
+        config = Configuration(OSQPSolver, DummyActuator)
+        controller = Controller(config=config)
+        controller.robot_state.incoming_joint_values = np.zeros(len(controller.robot_state.joint_values))
+
         skipped = 0
-        for j in range(len(current_pose.joint_state.name)):
-            if current_pose.joint_state.name[j] in robot.get_group(move_group).get_active_joints():
-                current_pose.joint_state.position[j - skipped] = self.positions[time][j]
+        for i in range(len(robot.get_group(move_group).get_active_joints())):
+            if controller.robot_state.robot_model.active_joints[i].name in robot.get_group(move_group).get_active_joints():
+                    controller.robot_state.incoming_joint_values[i - skipped] = self.positions[time,i]
             else:
                 skipped += 1
 
-        link_idx = robot.get_link_names().index(link)
-
-        # get position of end effector with FK
-        fk_request = GetPositionFKRequest()
-        fk_request.fk_link_names = robot.get_link_names()
-        fk_request.header.frame_id = current_pose.joint_state.header.frame_id
-        fk_request.robot_state = current_pose
-        fk_solution = fk_service(fk_request)
-
-        if not fk_solution.error_code.val == fk_solution.error_code.SUCCESS:
-            print(f"ERROR: Could not compute forward kinematics for time {time}. Error code {fk_solution.error_code}")
-            return current_pose.joint_state
-
-        pose = fk_solution.pose_stamped[link_idx]
-        position = np.array([pose.pose.position.x, pose.pose.position.y, pose.pose.position.z])
-
-        # build constraint message
-        constraints = Constraints()
-        constraints.name = "MoveableJointsConstraints"
+        # build joint constraint as rho weight vector TODO adapt to SoT
+        rho = np.ones(controller.robot_state.robot_model.N)
         if movable_joints is not None:
-            for joint in robot.get_active_joint_names():
-                if joint not in movable_joints and joint in robot.get_group(move_group).get_active_joints():
-                    joint_constraint = JointConstraint()
-                    joint_constraint.joint_name = joint
-                    joint_constraint.position = current_pose.joint_state.position[
-                        current_pose.joint_state.name.index(joint)
-                    ]
-                    joint_constraint.tolerance_above = 0.5
-                    joint_constraint.tolerance_below = 0.5
-                    joint_constraint.weight = 1
-                    constraints.joint_constraints.append(joint_constraint)
+            for i in range(len(rho)):
+                if i in movable_joints:
+                    rho[i] = 1
+                else:
+                    rho[i] = 500
+        
+        # call stack of tasks and compute joint positions
+        joint_states = self._fake_pointer_control_loop(controller, point, link, rho, axis)
 
-        ik_request = PositionIKRequest()
-        ik_request.constraints = constraints
-        ik_request.group_name = move_group
-        ik_request.robot_state = current_pose
-        ik_request.ik_link_name = link
-        ik_request.pose_stamped = pose
-        ik_request.pose_stamped.pose = self._get_pointing_pose(position, point, axis, up_vector)
-        ik_solution: GetPositionIKResponse = ik_service(ik_request)
+        # build list with old joints
+        final_list = np.zeros(len(robot.get_group(move_group).get_active_joints()))
+        for i in range(len(robot.get_group(move_group).get_active_joints())):
+            for j in range(len(joint_states)):
+                if controller.robot_state.robot_model.active_joints[j].name == robot.get_group(move_group).get_active_joints()[i]:
+                    final_list[i] = joint_states[j]
 
-        # check for errors
-        if not ik_solution.error_code.val == ik_solution.error_code.SUCCESS:
-            print(f"ERROR: No pointing pose found for time {time}. Error code {ik_solution.error_code}")
-            return current_pose.joint_state
-        else:
-            return ik_solution.solution.joint_state
+        return final_list
+        
 
-
-    def _get_pointing_pose(self, frame, point, axis=[0, 0, 1], up_vector=[1, 0, 0]):
+    def _fake_pointer_control_loop(self, controller, point: np.ndarray, link_name: str, rho: np.ndarray, axis=[0,0,1]):
         """
-        Get end effector pose for pointing a axis in the link to a specific point in space.
+        Use Stack of Tasks framework and simulate a dummy robot state to iteratively compute a pointing pose that
+        respects the current joint values.
 
         Parameters:
-        - frame: Position of the end effector link
-        - point: Position of the point that the link should point towards
-        - axis: The axis that should point at the point
-        - up_vector: When pointing at the point, this axis will point as far upwards as possible.
+        - joint_states: Array of preferred joint positions
+        - point: Coordinates of point to look at
+        - link_name: Link that should point towards the point
+        - axis: Axis in the link that should be pointed at the point.
         """
 
-        # get direction vector
-        direction = np.array(point) - np.array(frame)
-        direction /= np.linalg.norm(direction)
+        # prepare controller and tasks
+        # define point transformation matrix
+        point_frame = np.array([[1, 0, 0, point[0]],
+                                [0, 1, 0, point[1]],
+                                [0, 0, 1, point[2]],
+                                [0, 0, 0, 1  ]])
 
-        # normalize axis
-        axis = np.array(axis) / np.linalg.norm(axis)
+        # define first level task at pointing at the point
+        with controller.task_hierarchy.new_level() as level:
+            level.append(RayTask(refA=RobotRefFrame(controller.robot_state, link_name=link_name), 
+                                            refB=Offset(Origin(), point_frame), 
+                                            softness_type=TaskSoftnessType.linear,
+                                            refA_axis=np.array(axis),
+                                            relType=RelativeType.RELATIVE, weight=1.0,
+                                            mode="axis + dp",
+                                            rho=rho))
+        
+        # now start a custom control loop
+        rate = rospy.Rate(40)
+        warmstart_dq = None
+        controller.solver.tasks_changed()
 
-        # align axis with end effector:
+        convergence = 0
+        last_dq = 100
 
-        # get rotation axis: EEF can be rotated around axis orthogonal to both the direction vector and
-        # the axis vector, so calculate cross product
-        rotation_axis = np.cross(axis, direction)
-
-        # get rotation angle
-        angle = np.dot(axis, direction)
-
-        # if the norm of the cross product is (close to) zero, then axis and direction are already parallel
-        # in that case, check if they point in the same direction
-        if np.linalg.norm(rotation_axis) < 0.0001:
-            if angle > 0:
-                # they point in the same direction; no further transformation is needed
-                rotation_matrix = np.eye(3)
+        while not rospy.is_shutdown_requested() and convergence < 10:
+            warmstart_dq = controller.control_step(warmstart_dq)
+            dq = np.linalg.norm(warmstart_dq)
+            if abs(dq - last_dq) <= 0.005:
+                convergence += 1
             else:
-                # they point into opposite directions; rotate 180 degrees
-                # calculate orthogonal axis to rotate around
-                orthogonal = np.array([1, 0, 0])
-                if np.allclose(orthogonal, axis, atol=0.01):
-                    orthogonal = np.array([0, 1, 0])
-                orthogonal = np.cross(axis, orthogonal)
-                orthogonal /= np.linalg.norm(orthogonal)
-
-                # build rotation matrix (see Rodrigues' rotation formula)
-                skew_mat = np.array([[0, -orthogonal[2], orthogonal[1]],
-                                    [orthogonal[2], 0, -orthogonal[0]],
-                                    [-orthogonal[1], orthogonal[0], 0]])
-                rotation_matrix = np.eye(3) + np.sin(np.pi) * skew_mat \
-                                + (1 - np.cos(np.pi)) * (skew_mat @ skew_mat)
-        else:
-            # if axes are not aligned, rotate
-            skew_mat = np.array([[0, -rotation_axis[2], rotation_axis[1]],
-                                [rotation_axis[2], 0, -rotation_axis[0]],
-                                [-rotation_axis[1], rotation_axis[0], 0]])
-            rotation_matrix = np.eye(3) + skew_mat + skew_mat@skew_mat * \
-                            ((1 - angle) / np.linalg.norm(rotation_axis)**2)
+                convergence = 0
+            last_dq = dq
+            rate.sleep()
         
-        # rotate up vector
-        up_vector = rotation_matrix @ up_vector
+        # converged!
 
-        # use Gram-Schmidt process to build frame, where the z axis is the direction axis
-        # and the y axis points up (as far as possible)
-        up_world_vector = np.array([0, 0, 1])
+        return controller.robot_state.joint_values
+
         
-        # calculate angle between up_vector and up_world_vector
-        angle = np.arccos(np.clip(np.dot(up_vector, up_world_vector), -1.0, 1.0))
-
-        # if dot product of the rotation axis and the cross product of up_vector and up_world_vector
-        # is negative, the rotation needs to be inverted
-        if np.dot(np.cross(up_vector, up_world_vector), direction) < 0:
-            angle *= -1
-        
-        # build rotation matrix to align the pointing frame better with the up vector
-        skew_mat = np.array([[0, -direction[2], direction[1]],
-                                [direction[2], 0, -direction[0]],
-                                [-direction[1], direction[0], 0]])
-        up_rotation_matrix = np.eye(3) + np.sin(angle) * skew_mat \
-                            + (1 - np.cos(angle)) * (skew_mat @ skew_mat)
-
-        # build final rotation matrix
-        final_rotation = np.eye(4)
-        final_rotation[:3, :3] = up_rotation_matrix @ rotation_matrix
-        quaternion = tf.quaternion_from_matrix(final_rotation)
-
-        pose = Pose()
-        pose.position.x = frame[0]
-        pose.position.y = frame[1]
-        pose.position.z = frame[2]
-        pose.orientation.x = quaternion[0]
-        pose.orientation.y = quaternion[1]
-        pose.orientation.z = quaternion[2]
-        pose.orientation.w = quaternion[3]
-
-        return pose
-
