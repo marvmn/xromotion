@@ -126,13 +126,15 @@ class ExpressivePlanner:
             axis = gaze['axis'] if 'axis' in gaze.keys() else [0,0,1]
             up = gaze['up'] if 'up' in gaze.keys() else [1,0,0]
             movable = gaze['movable'] if 'movable' in gaze.keys() else self.robot.get_active_joint_names()
+            from_index = gaze['from'] if 'from' in gaze.keys() else 0
+            to_index = gaze['to'] if 'to' in gaze.keys() else -1
             
             # check again if this was an animation. If yes, it has been filled up,
             # the gaze should be applied on the original keyframes.
             if type(index) == int and type(self.plan[index]) == Animation:
                 new_trajectory_planner = TrajectoryPlanner(self.plan[index].times, self.plan[index].positions)
 
-                new_trajectory_planner.add_gaze(point, link, move_group, axis, up, movable)
+                new_trajectory_planner.add_gaze(point, link, move_group, axis, movable, from_index, to_index)
 
                 self.plan[index].positions = new_trajectory_planner.positions
                 self.plan[index]._reload_trajectory()

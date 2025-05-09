@@ -75,7 +75,7 @@ class TrajectoryPlanner:
         # finally, scale down global scale a little
         self.scale_global_speed(1.0 + max(amount / 2, 0.3))
 
-    def add_gaze(self, point, link, move_group, axis=[0,0,1], up_vector=[1,0,0], movable_joints=None):
+    def add_gaze(self, point, link, move_group, axis=[0,0,1], movable_joints=None, from_index=0, to_index=-1):
         """
         Makes the specified link point at the given point throughout the trajectory
         
@@ -84,29 +84,22 @@ class TrajectoryPlanner:
         - link: Name of the link that should look at the point. If None is given, use the end effector.
         - move_group: Name of the move_group to use for the IK computation
         - axis: The axis that should be pointed to the point
-        - up_vector: When pointing at the point, this axis will point as far upwards as possible.
+        - from_index: Gaze will be applied on keyframes from this index onwards.
+        - to_index: If not -1, Gaze will be applied from from_index to this index.
         """
         
         # prepare moveit robot interface
         robot = RobotCommander()
-        group = robot.get_group(move_group)
+        end_index = len(self.original_indices) - 1 if to_index == -1 else to_index
 
         # go through every keyframe
-        for i in self.original_indices:
+        for i in range(from_index, len(self.original_indices) + 1):
 
             # apply pointing pose
-            joint_state = self._get_pointing_joint_state(move_group, robot, i, link, point, axis, 
-                                                             up_vector, movable_joints)
-            # self.positions[i] = np.zeros(self.positions[i].shape)
-            # skipped = 0
-            # for j in range(len(joint_state)):
-            #     if joint_state.name[j] in group.get_active_joints():
-            #         self.positions[i,j - skipped] = joint_state.position[j]
-            #     else:
-            #         skipped += 1
-            print(f'found gaze for state {i}. ')
+            joint_state = self._get_pointing_joint_state(move_group, robot, self.original_indices[i], link, point, axis, 
+                                                             movable_joints)
 
-            self.positions[i] = joint_state
+            self.positions[self.original_indices[i]] = joint_state
 
     def get_position_at(self, timestamp, original=False):
         """
@@ -237,7 +230,7 @@ class TrajectoryPlanner:
         return self.original_indices
 
     def _get_pointing_joint_state(self, move_group: str, robot: RobotCommander, time, link, point, 
-                                  axis=[0,0,1], up_vector=[1, 0, 0], movable_joints=None):
+                                  axis=[0,0,1], movable_joints=None):
         """
         Uses MoveIt's inverse kinematics to generate a joint state that lets the given link point
         the axis at the given point.

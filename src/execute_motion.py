@@ -56,7 +56,7 @@ print(f'MOVABLE: {active_joints}')
 planner.new_plan()
 planner.plan_animation("/home/mwiebe/noetic_ws/IsaacSim-ros_workspaces/noetic_ws/panda_animations/animation_happy2.yaml")
 gaze = {'point':[1.6, 0.0, 0.6], 'move_group':'panda_arm', 'link':'panda_hand', 'axis':[0,0,1], 'up':[1,0,0],
-        'movable': [4,5]}
+        'movable': [4,5], 'from':2, 'to':18}
 planner.apply_effects(index=0, gaze=gaze)
 planner.plan_animation("/home/mwiebe/noetic_ws/IsaacSim-ros_workspaces/noetic_ws/panda_animations/animation_happy2.yaml")
 #planner.plan_target(pose_goal, 'panda_arm', 1.0, 1.0, 'pose')
