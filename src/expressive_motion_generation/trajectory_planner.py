@@ -95,11 +95,16 @@ class TrajectoryPlanner:
         # go through every keyframe
         for i in range(from_index, end_index + 1):
 
+            # print progress because this could take some time
+            print(f'[TrajectoryPlanner] Applying Gaze for keyframe {i} ({round(float(i) * 100/(end_index + 1 - from_index), 1)}%)', end='\r')
+
             # apply pointing pose
             joint_state = self._get_pointing_joint_state(move_group, robot, self.original_indices[i], link, point, axis, 
                                                              movable_joints)
 
             self.positions[self.original_indices[i]] = joint_state
+        
+        print('[TrajectoryPlanner] Applied Gaze.')
 
     def get_position_at(self, timestamp, original=False):
         """
