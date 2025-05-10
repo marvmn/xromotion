@@ -49,8 +49,7 @@ class Animation:
             try:
                 file = open(os.path.join(os.getcwd(), animation_path), "r")
             except:
-                print("ERROR: File " + os.path.join(os.getcwd(), animation_path) + " could not be opened.")
-                return
+                raise FileNotFoundError
             
             # read file and compute times and joint goals
             self._load_yaml(file)

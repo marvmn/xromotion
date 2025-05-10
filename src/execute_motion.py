@@ -1,14 +1,14 @@
+import sys
 import expressive_motion_generation.trajectory_planner
 from expressive_motion_generation.expressive_planner import ExpressivePlanner
 from expressive_motion_generation.animation_execution import Animation
+from expressive_motion_generation.effects import *
 import rospy
 import geometry_msgs
 import moveit_commander
 import moveit_msgs.msg
-import sys
 import numpy as np
 import matplotlib.pyplot as plt
-
 # initialize moveit 
 moveit_commander.roscpp_initialize(sys.argv)
 
@@ -53,13 +53,23 @@ active_joints.pop(4)
 active_joints.pop(2)
 print(f'MOVABLE: {active_joints}')
 
+# planner.new_plan()
+# planner.plan_animation("/home/mwiebe/noetic_ws/IsaacSim-ros_workspaces/noetic_ws/panda_animations/animation_happy2.yaml")
+# gaze = {'point':[1.6, 0.0, 0.6], 'move_group':'panda_arm', 'link':'panda_hand', 'axis':[0,0,1], 'up':[1,0,0],
+#         'movable': [4,5], 'from':2, 'to':18}
+# planner.apply_effects(index=0, gaze=gaze)
+# planner.plan_animation("/home/mwiebe/noetic_ws/IsaacSim-ros_workspaces/noetic_ws/panda_animations/animation_happy2.yaml")
+# #planner.plan_target(pose_goal, 'panda_arm', 1.0, 1.0, 'pose')
+# #planner.apply_effects(index=1, jitter=0.01)
+# planner.bake()
+# planner.execute()
+
 planner.new_plan()
 planner.plan_animation("/home/mwiebe/noetic_ws/IsaacSim-ros_workspaces/noetic_ws/panda_animations/animation_happy2.yaml")
-gaze = {'point':[1.6, 0.0, 0.6], 'move_group':'panda_arm', 'link':'panda_hand', 'axis':[0,0,1], 'up':[1,0,0],
-        'movable': [4,5], 'from':2, 'to':18}
-planner.apply_effects(index=0, gaze=gaze)
-planner.plan_animation("/home/mwiebe/noetic_ws/IsaacSim-ros_workspaces/noetic_ws/panda_animations/animation_happy2.yaml")
-#planner.plan_target(pose_goal, 'panda_arm', 1.0, 1.0, 'pose')
-#planner.apply_effects(index=1, jitter=0.01)
+planner.at(0).add_effects(JitterEffect(0.02))
+
+planner.plan_target(pose_goal, 'panda_arm', 1.0, 1.0, 'pose')
+planner.at(1).add_effects(GazeEffect([1.6, 0.0, 0.6], 'panda_hand', 'panda_arm', [0,0,1], [4,5], 1))
+
 planner.bake()
 planner.execute()

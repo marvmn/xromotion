@@ -93,7 +93,7 @@ class TrajectoryPlanner:
         end_index = len(self.original_indices) - 1 if to_index == -1 else to_index
 
         # go through every keyframe
-        for i in range(from_index, len(self.original_indices) + 1):
+        for i in range(from_index, end_index + 1):
 
             # apply pointing pose
             joint_state = self._get_pointing_joint_state(move_group, robot, self.original_indices[i], link, point, axis, 

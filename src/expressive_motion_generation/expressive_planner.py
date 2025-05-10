@@ -6,6 +6,9 @@ from moveit_msgs.msg import RobotState, DisplayRobotState
 import time
 from expressive_motion_generation.trajectory_planner import TrajectoryPlanner
 from expressive_motion_generation.animation_execution import Animation
+from expressive_motion_generation.effects import *
+from typing import List, Union, Optional
+
 
 class TargetPlan:
 
@@ -18,7 +21,67 @@ class TargetPlan:
         self.move_group = move_group
         self.velocity_scaling = velocity_scaling
         self.acceleration_scaling = acceleration_scaling
-        self.effects = {}
+
+class Task:
+    """ Defines a task to be executed in a expressive motion plan """
+
+    def __init__(self, target: Union[Animation, TargetPlan], trajectory_planner: Optional[TrajectoryPlanner]=None):
+        """
+        Target is either an Animation or a TargetPlan defining the planned motion.
+        If the trajectory planner is already ready, it defines this task as baked.
+        """
+        self.target = target
+        self.trajectory_planner = trajectory_planner
+        self.effects = []
+    
+    def bake(self, trajectory_planner: Optional[TrajectoryPlanner] = None):
+        """
+        Set trajectory planner and apply effects.
+
+        Parameters:
+        - trajectory_planner: If this task does not contain an animation, trajectory \
+            needs to be computed and given as argument.
+        """
+        # set trajectory planner
+        if self.is_animation():
+            self.trajectory_planner = self.target.trajectory_planner
+        else:
+            if trajectory_planner is None:
+                raise ValueError("Trajectory planner must not be None if this is not an animation.")
+            self.trajectory_planner = trajectory_planner
+        
+        # apply effects
+        for effect in self.effects:
+            self._apply_effect(effect)
+
+    def add_effects(self, *effects: Effect):
+        """ Add effects to this task """
+        for effect in effects:
+            self.effects.append(effect)
+
+        # if already baked, apply the new effects as well
+        if self.is_baked():
+            for effect in effects:
+                self._apply_effect(effect)
+    
+    def _apply_effect(self, effect: Effect):
+        """ Apply the given effect to the trajectory. May only be called
+         if trajectory is already baked (trajectory planner exists). """
+        animation = self.target if self.is_animation() else None
+        effect.apply(self.trajectory_planner, animation)
+
+    def is_baked(self):
+        """ Is this task already baked/ready to be executed?"""
+        return not self.trajectory_planner is None
+
+    def is_animation(self):
+        """ Is this task an animation? """
+        return type(self.target) == Animation
+
+    def __str__(self):
+        target_type = f"Animation {self.target.name}" if self.is_animation() else f"Target ({self.target.target_type}) to {self.target.target}"
+        baked = "Baked" if self.is_baked() else "Not Baked"
+        return f'Task: {target_type} - {baked}'
 
 class ExpressivePlanner:
 
@@ -30,8 +93,7 @@ class ExpressivePlanner:
         If fake_display is True, instead of joint states DisplayRobotState messages get published.
         """
 
-        self.plan = []
-        self.baked = []
+        self.plan: List[Task] = []
 
         self.robot = robot
         self.frame_id = robot.get_planning_frame()
@@ -53,15 +115,28 @@ class ExpressivePlanner:
         Initialize a new plan for the given robot.
         """
         self.plan = []
-        self.baked = []
         self._last_trajectory_planner = None
     
-    def plan_animation(self, path):
+    def plan_animation(self, path: str) -> bool:
         """
-        Load an animation from a file and append it to plan
+        Load an animation from a file and append it to plan.
+
+        Parameters:
+        - path: Filepath relative to the current working directory
+        
+        Returns:
+        - True if successful, otherwise False.
         """
-        animation = Animation(path)
-        self.plan.append(animation)
+        # try loading animation and check if file exists
+        try:
+            animation = Animation(path)
+        except FileNotFoundError:
+            return False
+        
+        task = Task(animation)
+
+        # check if animation was successfully loaded
+        self.plan.append(task)
     
     def plan_target(self, target, move_group=None, velocity_scaling = None, acceleration_scaling = None, target_type='pose'):
         """
@@ -77,7 +152,7 @@ class ExpressivePlanner:
                 # choose the move group from the most recent element
                 # since both Animation and TargetPose have the move_group attribute,
                 # no distinction needs to be made.
-                move_group = self.plan[-1].move_group
+                move_group = self.plan[-1].target.move_group
 
             else:
 
@@ -87,100 +162,64 @@ class ExpressivePlanner:
         # now that the move_group is set, add target to plan!
         target_plan = TargetPlan(target, move_group, target_type=target_type, 
                                  velocity_scaling=velocity_scaling, acceleration_scaling=acceleration_scaling)
-        self.plan.append(target_plan)
+        task = Task(target_plan)
+        self.plan.append(task)
 
-    
-    def apply_effects(self, index=-1, **kwargs):
+    def add_task(self, task: Task, index: int = -1):
         """
-        Apply given effects to the plan part at the given index.
-        If no index is given, the last plan element is chosen.
-        Instead of an index, a trajectory planner can also be given.
-        
-        Possible effects:
-        - jitter=<jitter amount>
-        - gaze={'point'=<point position>, 'link'=<name of link to point>, 
-            'move_group'=<move group name>, axis'=<axis to point at point>, 
-            'up'=<up vector>}
-        """
-        if type(index) == int:
-            # if the chosen element is an Animation, use the embedded trajectory planner and apply effect
-            if type(self.plan[index]) == Animation:
-                trajectory_planner = self.plan[index].trajectory_planner
+        Add a custom task to this planner.
 
-            # otherwise this is a TargetPlan, so add this effect for future computing
-            else:
-                self.plan[index].effects = kwargs
-                return
+        Parameters:
+        - task: Task to be added
+        - index: Index where it should be inserted in the plan. If -1, then it will be appended.
+        """
+        if index == -1:
+            self.plan.append(task)
+        elif index >= 0 and index < len(self.plan):
+            self.plan.insert(index, task)
         else:
-            trajectory_planner = index
+            raise IndexError(f"Task could not be inserted at {index}. The plan has length {len(self.plan)}.")
 
-        # apply gaze if given
-        if 'gaze' in kwargs.keys():
+    def at(self, index: int) -> Optional[Task]:
+        """
+        Returns the task at the given index.
 
-            # get dictionary elements
-            gaze = kwargs['gaze']
-            point = gaze['point'] if 'point' in gaze.keys() else [2,0,0]
-            move_group = gaze['move_group'] if 'move_group' in gaze.keys() else self.robot.get_group_names()[0]
-            link = gaze['link'] if 'link' in gaze.keys() else \
-                self.robot.get_group(move_group).get_end_effector_link()
-            axis = gaze['axis'] if 'axis' in gaze.keys() else [0,0,1]
-            up = gaze['up'] if 'up' in gaze.keys() else [1,0,0]
-            movable = gaze['movable'] if 'movable' in gaze.keys() else self.robot.get_active_joint_names()
-            from_index = gaze['from'] if 'from' in gaze.keys() else 0
-            to_index = gaze['to'] if 'to' in gaze.keys() else -1
-            
-            # check again if this was an animation. If yes, it has been filled up,
-            # the gaze should be applied on the original keyframes.
-            if type(index) == int and type(self.plan[index]) == Animation:
-                new_trajectory_planner = TrajectoryPlanner(self.plan[index].times, self.plan[index].positions)
-
-                new_trajectory_planner.add_gaze(point, link, move_group, axis, movable, from_index, to_index)
-
-                self.plan[index].positions = new_trajectory_planner.positions
-                self.plan[index]._reload_trajectory()
-            
-            # if not, just apply
-            else:
-                trajectory_planner.add_gaze(point, link, move_group, axis, up)
-
-        # apply jitter if given
-        if 'jitter' in kwargs.keys():
-            trajectory_planner.add_jitter(kwargs['jitter'])
-
-
+        Parameters:
+        - index: Index of the task
+        """
+        # if index is not valid, return None
+        if len(self.plan) <= index:
+            return None
+        return self.plan[index]
                 
     def bake(self):
         """
         Pre-compute all trajectories and prepare trajectory planners for execution.
         """
-        self.baked = []
+        last_position = None
 
         # go through each element
-        for element in self.plan:
+        for task in self.plan:
             
             # if element is animation instance, the trajectory planner is ready to use
-            if type(element) == Animation:
-                self.baked.append(element.trajectory_planner)
+            if task.is_animation():
+                # TODO transition from last position?
+                task.bake()
             
             # otherwise, the motion needs to be computed
             else:
                 # if this is the first element, the current robot pose suffices as start pose.
                 # otherwise take the last pose of the previous element as starting pose
-                start_state = None
-
-                if self.baked:
-                    last_position = self.baked[-1].positions[-1]
-                    start_state = RobotState()
-                    start_state.joint_state.position = last_position
-                    start_state.joint_state.name = self.robot.get_group(element.move_group).get_active_joints()
-                
-                trajectory_planner = self.plan_trajectory(element.target, element.move_group, element.target_type, start_state,
-                                                          element.velocity_scaling, element.acceleration_scaling)
+                trajectory_planner = self.plan_trajectory(task.target.target, task.target.move_group, task.target.target_type, last_position,
+                                                          task.target.velocity_scaling, task.target.acceleration_scaling)
 
                 # apply effects!
-                self.apply_effects(trajectory_planner, **element.effects)
+                task.bake(trajectory_planner)
 
-                self.baked.append(trajectory_planner)
+            # compute last position
+            last_position = RobotState()
+            last_position.joint_state.position = task.trajectory_planner.positions[-1]
+            last_position.joint_state.name = self.robot.get_group(task.target.move_group).get_active_joints()
 
     def plan_trajectory(self, target, move_group, target_type, start_state=None, velocity_scaling=None, acceleration_scaling=None):
         """
@@ -201,7 +240,6 @@ class ExpressivePlanner:
             self.robot.get_group(move_group).set_max_acceleration_scaling_factor(acceleration_scaling)
         
         # set target
-        print('[ExpressivePlanner]\t\tTARGET TYPE:', target_type)
         if target_type == 'pose':
             self.robot.get_group(move_group).set_pose_target(target)
         elif target_type == 'joint':
@@ -241,45 +279,34 @@ class ExpressivePlanner:
         Execute the current plan through the given JointState publisher.
         """
 
-        # check if the plan has been baked
-        if self.baked:
-            
-            # if so, execute the baked trajectory planners
-            # go through each element and execute it
-            for element in self.baked:
-                self._execute_trajectory(element)
-            
-        else:
+        # go through each element, plan and execute it!
+        for task in self.plan:
 
-            # go through each element, plan and execute it!
-            for element in self.plan:
-
-                # if this element is an animation instance, use the provided trajectory planner
-                if type(element) == Animation:
-                    self._last_trajectory_planner = element.trajectory_planner
-                    self._execute_trajectory(element.trajectory_planner)
+            # if this task is not baked, calculate motion and apply effects
+            if not task.is_baked():
+                # if element is animation instance, the trajectory planner is ready to use
+                if task.is_animation():
+                    # TODO transition from last position?
+                    task.bake()
                 
-                # otherwise plan the motion with moveit and execute it
+                # otherwise, the motion needs to be computed
                 else:
-                    
-                    # if fake execution is active, the actual robot was not moved, so the start state
-                    # has to be explicitly set
-                    start_state = None
-                    if self.fake_display and self._last_trajectory_planner is not None:
-                        last_position = self._last_trajectory_planner.positions[-1]
-                        start_state = RobotState()
-                        start_state.joint_state.position = last_position
-                        start_state.joint_state.name = self.robot.get_group(element.move_group).get_active_joints()
-                    
-                    trajectory_planner = self.plan_trajectory(element.target, element.move_group,
-                                                              element.target_type, start_state=start_state,
-                                                              velocity_scaling=element.velocity_scaling,
-                                                              acceleration_scaling=element.acceleration_scaling)
-                    self._last_trajectory_planner = trajectory_planner
-                    
-                    self.apply_effects(trajectory_planner, **element.effects)
+                    # if this is the first element, the current robot pose suffices as start pose.
+                    # otherwise take the last pose of the previous element as starting pose
+                    trajectory_planner = self.plan_trajectory(task.target.target, task.target.move_group, task.target.target_type, last_position,
+                                                            task.target.velocity_scaling, task.target.acceleration_scaling)
 
-                    self._execute_trajectory(trajectory_planner)
+                    # apply effects!
+                    task.bake(trajectory_planner)
+
+            # compute last position
+            last_position = RobotState()
+            last_position.joint_state.position = task.trajectory_planner.positions[-1]
+            last_position.joint_state.name = self.robot.get_group(task.target.move_group).get_active_joints()
+
+            # execute
+            self._execute_trajectory(task.trajectory_planner)
+            self._last_trajectory_planner = task.trajectory_planner
 
         # when everything is done, return True
         return True
