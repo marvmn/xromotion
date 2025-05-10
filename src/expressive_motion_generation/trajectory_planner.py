@@ -247,7 +247,6 @@ class TrajectoryPlanner:
         - link: Name of the pointer link
         - point: 3D Coordinates of the point to point at
         - axis: Direction vector of the axis to point at the point
-        - up_vector: When pointing at the point, this axis will point as far upwards as possible.
         - movable_joints: Joints that can be moved from the original state in order to reach pointing state
         """
 
@@ -259,7 +258,7 @@ class TrajectoryPlanner:
         skipped = 0
         for i in range(len(robot.get_group(move_group).get_active_joints())):
             if controller.robot_state.robot_model.active_joints[i].name in robot.get_group(move_group).get_active_joints():
-                    controller.robot_state.incoming_joint_values[i - skipped] = self.positions[time,i]
+                    controller.robot_state.incoming_joint_values[i - skipped] = self.positions[time][i]
             else:
                 skipped += 1
 

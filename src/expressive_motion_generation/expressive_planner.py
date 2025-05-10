@@ -85,6 +85,14 @@ class Task:
         """ Is this task an animation? """
         return type(self.target) == Animation
 
+    def get_last_joint_state(self):
+        """ Returns last joint state for this task """
+        if self.is_baked():
+            return self.trajectory_planner.positions[-1]
+        elif self.is_animation():
+            return self.target.positions[-1]
+        return None
+
     def __str__(self):
         target_type = f"Animation {self.target.name}" if self.is_animation() else f"Target ({self.target.target_type}) to {self.target.target}"
         baked = "Baked" if self.is_baked() else "Not Baked"
@@ -308,7 +316,7 @@ class ExpressivePlanner:
 
             # compute last position
             last_position = RobotState()
-            last_position.joint_state.position = task.trajectory_planner.positions[-1]
+            last_position.joint_state.position = task.get_last_joint_state()
             last_position.joint_state.name = self.robot.get_group(task.target.move_group).get_active_joints()
 
             # execute

@@ -46,7 +46,7 @@ plt.savefig("plot_tp_times")
 # go!
 #planner.execute(original=False)
 """
-
+from expressive_motion_generation.utils import make_point_at_task, make_point_at_task_from
 # try out animation
 active_joints.pop(6)
 active_joints.pop(4)
@@ -69,7 +69,11 @@ planner.plan_animation("/home/mwiebe/noetic_ws/IsaacSim-ros_workspaces/noetic_ws
 planner.at(0).add_effects(JitterEffect(0.02))
 
 planner.plan_target(pose_goal, 'panda_arm', 1.0, 1.0, 'pose')
-planner.at(1).add_effects(JitterEffect(0.05, 20), GazeEffect([1.6, 0.0, 0.6], 'panda_hand', 'panda_arm', [0,0,1], [4,5], 1))
+#planner.at(1).add_effects(JitterEffect(0.05, 20), GazeEffect([1.6, 0.0, 0.6], 'panda_hand', 'panda_arm', [0,0,1], [4,5], 1))
 
 planner.bake()
+
+planner.add_task(make_point_at_task_from(robot, 'panda_arm', [1.6, 0, 0.6], 'panda_hand', planner.at(1).get_last_joint_state()))
+#planner.add_task(make_point_at_task(robot, 'panda_arm', [1.6, 0, 0.6], 'panda_hand'))
+
 planner.execute()
