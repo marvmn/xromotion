@@ -27,18 +27,22 @@ class JitterEffect(Effect):
     """ Jitter effect: Adds shakiness to the motion. Amount indicates the maximum modification value
      that is added or subtracted from the joint values in radians. """
 
-    def __init__(self, amount: float = 0.01,
+    def __init__(self, amount: float = 0.01, fill: int = 0,
                  start_index:int = 0, stop_index:int = -1):
         """
         Parameters:
         - amount: Maximum radian value that is added or subtracted.
+        - fill: The rate that the trajectory planner is filled up to to make the effect applicable.
         - start_index: Keyframe index where the effect should begin.
         - stop_index: Keyframe index where the effect should end. If this is -1, the last keyframe will be used. 
         """
         super().__init__(start_index, stop_index)
         self.amount = amount
+        self.fill = fill
     
     def apply(self, trajectory_planner: TrajectoryPlanner, animation: Optional[Animation] = None):
+        if self.fill > 0:
+            trajectory_planner.fill_up(self.fill)
         trajectory_planner.add_jitter(self.amount)
 
 

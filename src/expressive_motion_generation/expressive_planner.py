@@ -57,7 +57,14 @@ class Task:
     def add_effects(self, *effects: Effect):
         """ Add effects to this task """
         for effect in effects:
-            self.effects.append(effect)
+
+            # special case: If this is a gaze effect, put it in the beginning
+            # this is because this effect reinitalizes the trajectory if this is an animation,
+            # so it overwrites all effects applied before.
+            if type(effect) == GazeEffect:
+                self.effects.insert(0, effect)
+            else:
+                self.effects.append(effect)
 
         # if already baked, apply the new effects as well
         if self.is_baked():

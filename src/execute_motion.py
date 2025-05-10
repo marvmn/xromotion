@@ -69,7 +69,7 @@ planner.plan_animation("/home/mwiebe/noetic_ws/IsaacSim-ros_workspaces/noetic_ws
 planner.at(0).add_effects(JitterEffect(0.02))
 
 planner.plan_target(pose_goal, 'panda_arm', 1.0, 1.0, 'pose')
-planner.at(1).add_effects(GazeEffect([1.6, 0.0, 0.6], 'panda_hand', 'panda_arm', [0,0,1], [4,5], 1))
+planner.at(1).add_effects(JitterEffect(0.05, 20), GazeEffect([1.6, 0.0, 0.6], 'panda_hand', 'panda_arm', [0,0,1], [4,5], 1))
 
 planner.bake()
 planner.execute()
