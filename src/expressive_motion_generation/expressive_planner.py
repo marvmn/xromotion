@@ -206,7 +206,19 @@ class ExpressivePlanner:
         if len(self.plan) <= index:
             return None
         return self.plan[index]
-                
+
+    def get_last_joint_state(self):
+        """ If there are any elements in the task, return the joint state that the current plan will end in """
+        if not self.plan:
+            return None
+        else:
+            state = self.plan[-1].get_last_joint_state()
+            if state is None:
+                self.plan[-1].bake()
+                return self.plan[-1].get_last_joint_state()
+            else:
+                return state
+
     def bake(self):
         """
         Pre-compute all trajectories and prepare trajectory planners for execution.

@@ -65,6 +65,5 @@ def make_point_at_task_from(robot: RobotCommander, move_group: str, point: np.nd
     animation.times = np.append(animation.times, time)
     animation.positions.append(positions)
     animation.positions = np.array(animation.positions)
-    print(animation.positions, animation.times)
     animation._reload_trajectory()
     return Task(animation)

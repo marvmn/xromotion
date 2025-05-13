@@ -1,6 +1,7 @@
 import copy
 import rospy
 import numpy as np
+from typing import Optional
 import tf.transformations as tf
 from sensor_msgs.msg import JointState
 from moveit_commander.robot import RobotCommander
@@ -95,16 +96,31 @@ class TrajectoryPlanner:
         # go through every keyframe
         for i in range(from_index, end_index + 1):
 
-            # print progress because this could take some time
-            print(f'[TrajectoryPlanner] Applying Gaze for keyframe {i} ({round(float(i) * 100/(end_index + 1 - from_index), 1)}%)', end='\r')
-
             # apply pointing pose
             joint_state = self._get_pointing_joint_state(move_group, robot, self.original_indices[i], link, point, axis, 
                                                              movable_joints)
 
             self.positions[self.original_indices[i]] = joint_state
+
+    def scale_extent(self, scalar: float, robot: RobotCommander, move_group: Optional[str] = None):
+        """
         
-        print('[TrajectoryPlanner] Applied Gaze.')
+        """
+        if move_group is None:
+            move_group = robot.get_group_names()[0]
+
+        for i in range(len(self.positions)):
+            self.positions[i] *= scalar
+
+            # check joint limits
+            for j in range(len(self.positions[i])):
+                joint = robot.get_joint(robot.get_group(move_group).get_active_joints()[j])
+
+                if self.positions[i][j] > joint.max_bound():
+                    self.positions[i][j] = joint.max_bound()
+                elif self.positions[i][j] < joint.min_bound():
+                    self.positions[i][j] = joint.min_bound()
+            
 
     def get_position_at(self, timestamp, original=False):
         """
@@ -314,7 +330,6 @@ class TrajectoryPlanner:
                                             rho=rho))
         
         # now start a custom control loop
-        rate = rospy.Rate(40)
         warmstart_dq = None
         controller.solver.tasks_changed()
 
@@ -329,7 +344,6 @@ class TrajectoryPlanner:
             else:
                 convergence = 0
             last_dq = dq
-            rate.sleep()
         
         # converged!
 

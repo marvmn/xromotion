@@ -51,7 +51,6 @@ from expressive_motion_generation.utils import make_point_at_task, make_point_at
 active_joints.pop(6)
 active_joints.pop(4)
 active_joints.pop(2)
-print(f'MOVABLE: {active_joints}')
 
 # planner.new_plan()
 # planner.plan_animation("/home/mwiebe/noetic_ws/IsaacSim-ros_workspaces/noetic_ws/panda_animations/animation_happy2.yaml")
@@ -66,14 +65,9 @@ print(f'MOVABLE: {active_joints}')
 
 planner.new_plan()
 planner.plan_animation("/home/mwiebe/noetic_ws/IsaacSim-ros_workspaces/noetic_ws/panda_animations/animation_happy2.yaml")
-planner.at(0).add_effects(JitterEffect(0.02))
-
+planner.at(0).add_effects(GazeEffect([0.6, 0, 0.6], 'panda_hand', 'panda_arm', start_index=3, stop_index=17))
 planner.plan_target(pose_goal, 'panda_arm', 1.0, 1.0, 'pose')
-#planner.at(1).add_effects(JitterEffect(0.05, 20), GazeEffect([1.6, 0.0, 0.6], 'panda_hand', 'panda_arm', [0,0,1], [4,5], 1))
-
+planner.at(1).add_effects(JitterEffect(0.02))
 planner.bake()
-
-planner.add_task(make_point_at_task_from(robot, 'panda_arm', [1.6, 0, 0.6], 'panda_hand', planner.at(1).get_last_joint_state()))
-#planner.add_task(make_point_at_task(robot, 'panda_arm', [1.6, 0, 0.6], 'panda_hand'))
-
+planner.add_task(make_point_at_task_from(robot, 'panda_arm', [1.6, 0, 0.6], 'panda_hand', planner.get_last_joint_state()))
 planner.execute()
