@@ -305,6 +305,7 @@ class ExpressivePlanner:
         """
         Execute the current plan through the given JointState publisher.
         """
+        last_position = None
 
         # go through each element, plan and execute it!
         for task in self.plan:

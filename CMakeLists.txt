@@ -9,8 +9,6 @@ project(panda_expressive_motion_generation)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
   rospy
-  roscpp
-  std_msgs
   geometry_msgs
   moveit_msgs
   moveit_commander
