@@ -71,7 +71,6 @@ class GazeEffect(Effect):
         self.movable = movable
     
     def apply(self, trajectory_planner: TrajectoryPlanner, animation: Optional[Animation] = None):
-        print(f'Start: {self.start_index}, Stop: {self.stop_index}')
         # if animation, only apply on keyframes and then fill up again
         if not animation is None:
 
@@ -131,7 +130,11 @@ class ExtentEffect(Effect):
     def apply(self, trajectory_planner: TrajectoryPlanner, animation: Optional[Animation] = None):
         
         # go through each keyframe
-        for i in range(len(trajectory_planner.positions)):
+        n = len(trajectory_planner.positions)
+        for i in range(n):
+
+            # effect scaling to reduce impact at beginning and end
+            scaling = max(min(i, n - i), n//6) / (n//6)
             
             # build augmented vector with entry (q_i, 1) for joint i
             position_vector = np.concatenate((np.expand_dims(trajectory_planner.positions[i], 1), 

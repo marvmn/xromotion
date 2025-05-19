@@ -1,4 +1,5 @@
 import copy
+import time
 import rospy
 import numpy as np
 from typing import Optional
@@ -99,14 +100,22 @@ class TrajectoryPlanner:
         robot = RobotCommander()
         end_index = len(self.original_indices) - 1 if to_index == -1 else to_index
 
+        full_time = 0
+
         # go through every keyframe
         for i in range(from_index, end_index + 1):
+            t = time.time()
 
             # apply pointing pose
             joint_state = self._get_pointing_joint_state(move_group, robot, self.original_indices[i], link, point, axis, 
                                                              movable_joints)
+            
+            print(f"[Gaze Effect] Converged for {i}/{end_index} in {time.time() - t}", end='\r')
+            full_time += time.time() - t
 
             self.positions[self.original_indices[i]] = joint_state
+        
+        print(f"[Gaze Effect] Finished gaze calculation in {round(full_time, 3)}s")
 
     def enforce_joint_limits(self, robot: RobotCommander, move_group: Optional[str] = None):
         """
@@ -281,7 +290,7 @@ class TrajectoryPlanner:
     def _get_pointing_joint_state(self, move_group: str, robot: RobotCommander, time, link, point, 
                                   axis=[0,0,1], movable_joints=None):
         """
-        Uses MoveIt's inverse kinematics to generate a joint state that lets the given link point
+        Uses Stack of Tasks framework to generate a joint state that lets the given link point
         the axis at the given point.
 
         Parameters:
@@ -306,7 +315,7 @@ class TrajectoryPlanner:
             else:
                 skipped += 1
 
-        # build joint constraint as rho weight vector TODO adapt to SoT
+        # build joint constraint as rho weight vector 
         rho = np.ones(controller.robot_state.robot_model.N)
         if movable_joints is not None:
             for i in range(len(rho)):
@@ -337,6 +346,7 @@ class TrajectoryPlanner:
         - controller: Stack of Tasks Controller to use
         - point: Coordinates of point to look at
         - link_name: Link that should point towards the point
+        - rho: Weight vector that defines which joints should be used for the task
         - axis: Axis in the link that should be pointed at the point.
         """
 
@@ -367,7 +377,7 @@ class TrajectoryPlanner:
         while not rospy.is_shutdown_requested() and convergence < 10:
             warmstart_dq = controller.control_step(warmstart_dq)
             dq = np.linalg.norm(warmstart_dq)
-            if abs(dq - last_dq) <= 0.005:
+            if abs(dq - last_dq) <= 0.000001:
                 convergence += 1
             else:
                 convergence = 0
