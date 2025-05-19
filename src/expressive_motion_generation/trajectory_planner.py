@@ -45,12 +45,15 @@ class TrajectoryPlanner:
         # When the last point of the trajectory is reached, done becomes True
         self.done = False
     
-    def scale_global_speed(self, scalar):
+    def scale_global_speed(self, scalar: float):
         """
         Scales the speed of the trajectory globally, meaning that every
         keyframe's time gets scaled by the same scalar.
         When scalar > 1 the movement is slower, when 0 < scalar < 1 it
         gets faster.
+
+        Parameters:
+        - scalar: Every time stamp gets multiplied with this scalar.
         """
         for i in range(len(self.times)):
             self.times[i] = self.times[i] * scalar
@@ -60,6 +63,9 @@ class TrajectoryPlanner:
         Applies a certain amount of randomness to a motion to make it seem
         less confident. The randomness is scaled down at the beginning and
         the end to avoid conflicts with the functional objective.
+
+        Parameters:
+        - amount: Maximum value that gets added to or subtracted from a joint position.
         """
 
         # first, generate random summands for every position
@@ -102,17 +108,20 @@ class TrajectoryPlanner:
 
             self.positions[self.original_indices[i]] = joint_state
 
-    def scale_extent(self, scalar: float, robot: RobotCommander, move_group: Optional[str] = None):
+    def enforce_joint_limits(self, robot: RobotCommander, move_group: Optional[str] = None):
         """
-        
+        Check all joint state values in positions and enforce joint limits.
+        Values that exceed the upper bound are capped to the upper bound's exact value,
+        values that fall under the lower bound are accordingly set to the lower bound's value.
+
+        Parameters:
+        - robot: RobotCommander with the robot description that holds the correct joint limits.
+        - move_group: Name of the move group that this trajectory is using for it's joint mapping.
         """
         if move_group is None:
             move_group = robot.get_group_names()[0]
 
         for i in range(len(self.positions)):
-            self.positions[i] *= scalar
-
-            # check joint limits
             for j in range(len(self.positions[i])):
                 joint = robot.get_joint(robot.get_group(move_group).get_active_joints()[j])
 
@@ -122,10 +131,20 @@ class TrajectoryPlanner:
                     self.positions[i][j] = joint.min_bound()
             
 
-    def get_position_at(self, timestamp, original=False):
+    def get_position_at(self, timestamp: float, original=False) -> np.ndarray:
         """
         Interpolates and returns the point at the specified timestamp (in seconds).
         If original is True, use the original trajectory instead of the modified one.
+
+        Parameters:
+        - timestamp: Timestamp to get the joint values for. If the timestamp is lower than \
+            the first timestamp in this trajectory, the first value is returned. If it is bigger \
+            than the last timestamp (or than the trajectory length), the last value is returned.
+        - original: If True, the unmodified original values that the trajectory planner was \
+            initialized with are used.
+        
+        Returns:
+        - Joint value array for the specified time stamp
         """
 
         # initialize timestamp and position variables
@@ -172,12 +191,18 @@ class TrajectoryPlanner:
         # interpolate position
         return pos0 + (pos1 - pos0) * scalar
 
-    def apply_bezier_at(self, index0, index1, cp0, cp1):
+    def apply_bezier_at(self, index0: int, index1: int, cp0: np.ndarray, cp1: np.ndarray):
         """
         Scales the velocity of the motion between two keyframes according to
         a Bézier curve. The curve assumes the position at index0 to be (0,0)
         and the position at index1 to be (1,1) to unify the choice of the
         control points cp0 and cp1 across different joint states.
+
+        Parameters:
+        - index0: Index of the first keyframe of the interval
+        - index1: Index of the second keyframe of the interval
+        - cp0: The first control point in the interval
+        - cp1: The second control point in the interval
         """
 
         # check if the two points are the same
@@ -211,10 +236,13 @@ class TrajectoryPlanner:
             # finally apply calculated time back to times array
             self.times[index0 + idx] = time * (self.times[index1] - self.times[index0]) + self.times[index0]
 
-    def fill_up(self, frequency):
+    def fill_up(self, frequency: float):
         """
         Fills up the times and positions arrays with interpolated values so that the
         resulting times are filled with a frequency of >frequency per second.
+
+        Parameters:
+        - frequency: Minimum frequency that this trajectory should have (in Hz).
         """
         new_positions = copy.deepcopy(self.positions)
         new_times = copy.deepcopy(self.times)
@@ -300,13 +328,13 @@ class TrajectoryPlanner:
         return final_list
         
 
-    def _fake_pointer_control_loop(self, controller, point: np.ndarray, link_name: str, rho: np.ndarray, axis=[0,0,1]):
+    def _fake_pointer_control_loop(self, controller: Controller, point: np.ndarray, link_name: str, rho: np.ndarray, axis=[0,0,1]):
         """
         Use Stack of Tasks framework and simulate a dummy robot state to iteratively compute a pointing pose that
         respects the current joint values.
 
         Parameters:
-        - joint_states: Array of preferred joint positions
+        - controller: Stack of Tasks Controller to use
         - point: Coordinates of point to look at
         - link_name: Link that should point towards the point
         - axis: Axis in the link that should be pointed at the point.

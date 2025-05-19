@@ -1,7 +1,8 @@
 """ Messages for effects """
 
 import numpy as np
-from typing import Optional
+from copy import deepcopy
+from typing import Iterable, List, Optional
 from expressive_motion_generation.trajectory_planner import TrajectoryPlanner
 from expressive_motion_generation.animation_execution import Animation
 
@@ -92,3 +93,51 @@ class GazeEffect(Effect):
             trajectory_planner.add_gaze(self.point, self.link, self.move_group, 
                                         self.axis, self.movable, self.start_index, 
                                         self.stop_index)
+
+class ExtentEffect(Effect):
+    """ Extent effect: Modifies the trajectory to follow a wider or narrower path. """
+    
+    def __init__(self, amount: float, mode_configuration: Iterable[float], 
+                 upper_joint_limits: Iterable[float], lower_joint_limits: Iterable[float]):
+        """
+        Initialize and calculate transform vector for extent effect.
+        
+        Parameters:
+        - amount: Effect scalar that determines the size and direction of the modifications. Should be in the range [-1, 1]. \
+            Negative values will make the trajectory narrower, positive values will make it wider.
+        - mode_configuration: List of mode for every joint. Modes can be: <br>\
+            - <b>'p'</b> <i>(positive extent)</i>: Adding positive values to this joint will make the robot pose wider <br>\
+            - <b>'n'</b> <i>(negative extent)</i>: Adding negative values to this joint will make the robot pose narrower <br>\
+            - <b>'g'</b> <i>(general extent)</i>: Multiplying a value > 1 with this joint's value will make the robot pose wider, < 1 narrower <br>\
+            - <b>'i'</b> <i>(independent)</i>: This joint's value has no influence on the wideness of the robot pose.
+        - upper_joint_limits: Upper joint limits, where upper_joint_limits[i] contains the limit for joint i.
+        - lower_joint_limits: Upper joint limits, where lower_joint_limits[i] contains the limit for joint i.
+        """
+        self.transform = np.ones((len(mode_configuration), 2))
+
+        # go through each joint and assign transformation
+        for i in range(len(mode_configuration)):
+
+            # check configuration and apply
+            if mode_configuration[i] == 'p':
+                self.transform[i] = [1 - amount, amount * upper_joint_limits[i]]
+            elif mode_configuration[i] == 'n':
+                self.transform[i] = [1 - amount, amount * lower_joint_limits[i]]
+            elif mode_configuration[i] == 'g':
+                self.transform[i] = [amount, 0]
+            else:
+                self.transform[i] = [1, 0]
+        
+    def apply(self, trajectory_planner: TrajectoryPlanner, animation: Optional[Animation] = None):
+        
+        # go through each keyframe
+        for i in range(len(trajectory_planner.positions)):
+            
+            # build augmented vector with entry (q_i, 1) for joint i
+            position_vector = np.concatenate((np.expand_dims(trajectory_planner.positions[i], 1), 
+                                              np.expand_dims(np.ones(len(trajectory_planner.positions[i])), 1)),
+                                             1)
+            position_vector = position_vector @ self.transform.T
+            
+            # get correct values from matrix diagonal
+            trajectory_planner.positions[i] = np.diag(position_vector)

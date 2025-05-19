@@ -20,6 +20,11 @@ active_joints = robot.get_active_joint_names()
 planner = ExpressivePlanner(robot=robot, publish_topic='joint_command', fake_display=False)
 robot.get_group('panda_arm').set_end_effector_link('panda_hand')
 
+group: moveit_commander.move_group.MoveGroupCommander = robot.get_group('panda_arm')
+
+upper_limits = [joint.max_bound() for joint in (robot.get_joint(joint_name) for joint_name in robot.get_active_joint_names('panda_arm'))]
+lower_limits = [joint.min_bound() for joint in (robot.get_joint(joint_name) for joint_name in robot.get_active_joint_names('panda_arm'))]
+
 # try out a pose
 pose_goal = geometry_msgs.msg.Pose()
 pose_goal.orientation.w = -0.2
@@ -47,11 +52,6 @@ plt.savefig("plot_tp_times")
 #planner.execute(original=False)
 """
 from expressive_motion_generation.utils import make_point_at_task, make_point_at_task_from
-# try out animation
-active_joints.pop(6)
-active_joints.pop(4)
-active_joints.pop(2)
-
 # planner.new_plan()
 # planner.plan_animation("/home/mwiebe/noetic_ws/IsaacSim-ros_workspaces/noetic_ws/panda_animations/animation_happy2.yaml")
 # gaze = {'point':[1.6, 0.0, 0.6], 'move_group':'panda_arm', 'link':'panda_hand', 'axis':[0,0,1], 'up':[1,0,0],
@@ -63,11 +63,15 @@ active_joints.pop(2)
 # planner.bake()
 # planner.execute()
 
-planner.new_plan()
-planner.plan_animation("/home/mwiebe/noetic_ws/IsaacSim-ros_workspaces/noetic_ws/panda_animations/animation_happy2.yaml")
-planner.at(0).add_effects(GazeEffect([0.6, 0, 0.6], 'panda_hand', 'panda_arm', start_index=3, stop_index=17))
-planner.plan_target(pose_goal, 'panda_arm', 1.0, 1.0, 'pose')
-planner.at(1).add_effects(JitterEffect(0.02))
+# planner.new_plan()
+# planner.plan_animation("/home/mwiebe/noetic_ws/IsaacSim-ros_workspaces/noetic_ws/panda_animations/animation_happy2.yaml")
+# planner.at(0).add_effects(GazeEffect([0.6, 0, 0.6], 'panda_hand', 'panda_arm', start_index=3, stop_index=17))
+# planner.plan_target(pose_goal, 'panda_arm', 1.0, 1.0, 'pose')
+# planner.at(1).add_effects(JitterEffect(0.02))
+# planner.bake()
+# planner.add_task(make_point_at_task_from(robot, 'panda_arm', [1.6, 0, 0.6], 'panda_hand', planner.get_last_joint_state()))
+# planner.execute()
+
+planner.plan_animation("/home/mwiebe/Documents/Studium/ba/Animations/test_animation2.yaml")
+planner.at(0).add_effects(ExtentEffect(0.2, ['g','n','g','p','m','p','i','i'], upper_limits, lower_limits))
 planner.bake()
-planner.add_task(make_point_at_task_from(robot, 'panda_arm', [1.6, 0, 0.6], 'panda_hand', planner.get_last_joint_state()))
-planner.execute()
