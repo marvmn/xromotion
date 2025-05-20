@@ -112,35 +112,97 @@ class ExtentEffect(Effect):
         - upper_joint_limits: Upper joint limits, where upper_joint_limits[i] contains the limit for joint i.
         - lower_joint_limits: Upper joint limits, where lower_joint_limits[i] contains the limit for joint i.
         """
-        self.transform = np.ones((len(mode_configuration), 2))
+        self.configuration = mode_configuration
+        self.amount = amount
+        self.limit_upper = upper_joint_limits
+        self.limit_lower = lower_joint_limits
+        # self.transform = np.ones((len(mode_configuration), 2))
 
-        # go through each joint and assign transformation
-        for i in range(len(mode_configuration)):
+        # # go through each joint and assign transformation
+        # for i in range(len(mode_configuration)):
 
-            # check configuration and apply
-            if mode_configuration[i] == 'p':
-                self.transform[i] = [1 - amount, amount * upper_joint_limits[i]]
-            elif mode_configuration[i] == 'n':
-                self.transform[i] = [1 - amount, amount * lower_joint_limits[i]]
-            elif mode_configuration[i] == 'g':
-                self.transform[i] = [amount, 0]
-            else:
-                self.transform[i] = [1, 0]
+        #     # check configuration and apply
+        #     if mode_configuration[i] == 'p':
+        #         self.transform[i] = [1 - amount, amount * upper_joint_limits[i]]
+        #     elif mode_configuration[i] == 'n':
+        #         self.transform[i] = [1 - amount, amount * lower_joint_limits[i]]
+        #     elif mode_configuration[i] == 'g':
+        #         self.transform[i] = [amount, 0]
+        #     else:
+        #         self.transform[i] = [1, 0]
+    
+    def _get_regular_spaced_trajectory(self, trajectory_planner: TrajectoryPlanner):
+        """
+        Compute the biggest frequency that can be used to describe the trajectory
+        without loss of quality and return the same trajectory filled up to that
+        frequency.
+
+        Parameters:
+        - trajectory_planner: Trajectory planner that holds the relevant trajectory
+
+        Returns:
+        - (times_n, positions_n) - new times and positions array. The times array will be regular spaced.
+        """
+        # 1. find greatest common divisor of times
+        divisor = 0.001 # np.gcd.reduce(trajectory_planner.times)
+
+        # 2. build new positions
+        new_times = np.arange(trajectory_planner.times[0], trajectory_planner.times[-1], divisor)
+        new_positions = []
+        for i in new_times:
+            new_positions.append(trajectory_planner.get_position_at(i))
+        
+        # 3. return!
+        return (np.array(new_times), np.array(new_positions))
+
         
     def apply(self, trajectory_planner: TrajectoryPlanner, animation: Optional[Animation] = None):
-        
-        # go through each keyframe
-        n = len(trajectory_planner.positions)
-        for i in range(n):
 
-            # effect scaling to reduce impact at beginning and end
-            scaling = max(min(i, n - i), n//6) / (n//6)
+        # get evenly spaced trajectory
+        new_times, new_positions = self._get_regular_spaced_trajectory(trajectory_planner)
+        old_positions = deepcopy(new_positions)
+        
+        # for each joint
+        for i in range(len(trajectory_planner.positions[0])):
+
+            # get fourier transform
+            fourier = np.fft.fft(new_positions.T[i])
+            frequencies = np.fft.fftfreq(len(new_times), new_times[1] - new_times[0])
+
+            low_freqs = np.abs(frequencies) < np.mean(np.abs(frequencies))
+
+            if self.configuration[i] == 'p':
+                fourier[low_freqs] += (abs(fourier[low_freqs]) * self.amount)
+            elif self.configuration[i] == 'n':
+                fourier[low_freqs] -= (abs(fourier[low_freqs]) * self.amount)
+            elif self.configuration[i] == 'm':
+                fourier[low_freqs] *= 1 + self.amount
             
-            # build augmented vector with entry (q_i, 1) for joint i
-            position_vector = np.concatenate((np.expand_dims(trajectory_planner.positions[i], 1), 
-                                              np.expand_dims(np.ones(len(trajectory_planner.positions[i])), 1)),
-                                             1)
-            position_vector = position_vector @ self.transform.T
+            # recompute positions
+            new_positions.T[i] = np.fft.ifft(fourier)
+        
+        difference = new_positions - old_positions
+
+        # make the effect fade in and out at the beginning and end of the motion
+        # to ensure that the start and end point of the motion stay the same
+        parabola = -0.05 * new_times[-1] * new_times * (new_times - new_times[-1])
+        cut = np.min([np.ones(parabola.shape), parabola], axis=0)
+
+        trajectory_planner.positions = (old_positions.T + cut * difference.T).T
+        trajectory_planner.times = new_times
+
+        # # go through each keyframe
+        # n = len(trajectory_planner.positions)
+        # for i in range(n):
+
+        #     # effect scaling to reduce impact at beginning and end
+        #     scaling = max(min(i, n - i), n//6) / (n//6)
             
-            # get correct values from matrix diagonal
-            trajectory_planner.positions[i] = np.diag(position_vector)
+        #     # build augmented vector with entry (q_i, 1) for joint i
+        #     position_vector = np.concatenate((np.expand_dims(trajectory_planner.positions[i], 1), 
+        #                                       np.expand_dims(np.ones(len(trajectory_planner.positions[i])), 1)),
+        #                                      1)
+        #     position_vector = position_vector @ self.transform.T
+            
+        #     # get correct values from matrix diagonal
+        #     trajectory_planner.positions[i] = np.diag(position_vector)
