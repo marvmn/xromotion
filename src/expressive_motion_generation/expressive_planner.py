@@ -32,7 +32,18 @@ class Task:
         """
         self.target = target
         self.trajectory_planner = trajectory_planner
+        self.custom_effect_order = False
         self.effects = []
+    
+    def set_custom_effect_order(self, value: bool):
+        """
+        Defines if the effects will be ordered to comfort to the default order before
+        applyling.
+
+        Parameters:
+        - value: If True, effects will not be reordered to fit the recommended order
+        """
+        self.custom_effect_order = value
     
     def bake(self, trajectory_planner: Optional[TrajectoryPlanner] = None):
         """
@@ -50,6 +61,10 @@ class Task:
                 raise ValueError("Trajectory planner must not be None if this is not an animation.")
             self.trajectory_planner = trajectory_planner
         
+        # reorder effects if needed
+        if not self.custom_effect_order:
+            self._sort_effects()
+
         # apply effects
         for effect in self.effects:
             self._apply_effect(effect)
@@ -76,6 +91,24 @@ class Task:
          if trajectory is already baked (trajectory planner exists). """
         animation = self.target if self.is_animation() else None
         effect.apply(self.trajectory_planner, animation)
+    
+    def _sort_effects(self):
+        """ Sorts effects to be in the default order. This guarantees two
+        things:
+        - GazeEffect will be applied first, which is recommended, since it \
+            can overwrite all other effects
+        - ExtentEffect will be applied last, since it increases the amount \
+            of keyframes by a large amount."""
+        new_effects = []
+        end = []
+        for i in range(len(self.effects)):
+            if type(self.effects[i]) == GazeEffect:
+                new_effects.insert(0, self.effects[i])
+            elif type(self.effects[i]) == ExtentEffect:
+                end.append(self.effects[i])
+            else:
+                new_effects.append(self.effects[i])
+        self.effects = new_effects + end
 
     def is_baked(self):
         """ Is this task already baked/ready to be executed?"""
@@ -195,7 +228,7 @@ class ExpressivePlanner:
         else:
             raise IndexError(f"Task could not be inserted at {index}. The plan has length {len(self.plan)}.")
 
-    def at(self, index: int) -> Optional[Task]:
+    def get_task_at(self, index: int) -> Optional[Task]:
         """
         Returns the task at the given index.
 

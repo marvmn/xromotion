@@ -131,6 +131,43 @@ class ExtentEffect(Effect):
         #     else:
         #         self.transform[i] = [1, 0]
     
+    def _gcd(self, a: float, b: float, limit: float = 0.0001) :
+        """
+        Compute greatest common divisor for float values.
+        https://www.geeksforgeeks.org/program-find-gcd-floating-point-numbers/
+
+        Parameters:
+        - a: First number
+        - b: Second number
+        - limit: Search precision
+        """
+
+        # b should always be the smaller value, so switch a and b if this is
+        # not the case
+        if (a < b) :
+            return self._gcd(b, a, limit)
+        
+        # is the difference of the result < than the threshold?
+        if (abs(b) < limit) :
+            return a
+        
+        # otherwise, recursively search for smaller value
+        return (self._gcd(b, a - np.floor(a / b) * b, limit))
+
+    def _gcd_array(self, array: Iterable[float]):
+        """ Calculates the greatest common divisor for an array of floats.
+        
+        Parameters:
+        - array: Array to find the GCD for.
+        
+        Returns:
+        - gcd: Greatest common divisor
+        """
+        gcd = array[0]
+        for i in range(1, len(array)):
+            gcd = self._gcd(array[i], gcd)
+        return gcd
+
     def _get_regular_spaced_trajectory(self, trajectory_planner: TrajectoryPlanner):
         """
         Compute the biggest frequency that can be used to describe the trajectory
@@ -144,7 +181,7 @@ class ExtentEffect(Effect):
         - (times_n, positions_n) - new times and positions array. The times array will be regular spaced.
         """
         # 1. find greatest common divisor of times
-        divisor = 0.001 # np.gcd.reduce(trajectory_planner.times)
+        divisor = self._gcd_array(trajectory_planner.times) # np.gcd.reduce(trajectory_planner.times)
 
         # 2. build new positions
         new_times = np.arange(trajectory_planner.times[0], trajectory_planner.times[-1], divisor)
@@ -190,19 +227,3 @@ class ExtentEffect(Effect):
 
         trajectory_planner.positions = (old_positions.T + cut * difference.T).T
         trajectory_planner.times = new_times
-
-        # # go through each keyframe
-        # n = len(trajectory_planner.positions)
-        # for i in range(n):
-
-        #     # effect scaling to reduce impact at beginning and end
-        #     scaling = max(min(i, n - i), n//6) / (n//6)
-            
-        #     # build augmented vector with entry (q_i, 1) for joint i
-        #     position_vector = np.concatenate((np.expand_dims(trajectory_planner.positions[i], 1), 
-        #                                       np.expand_dims(np.ones(len(trajectory_planner.positions[i])), 1)),
-        #                                      1)
-        #     position_vector = position_vector @ self.transform.T
-            
-        #     # get correct values from matrix diagonal
-        #     trajectory_planner.positions[i] = np.diag(position_vector)

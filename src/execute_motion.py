@@ -1,6 +1,7 @@
 import sys
 import expressive_motion_generation.trajectory_planner
 from expressive_motion_generation.expressive_planner import ExpressivePlanner
+from expressive_motion_generation.utils import make_point_at_task, make_point_at_task_from
 from expressive_motion_generation.animation_execution import Animation
 from expressive_motion_generation.effects import *
 import rospy
@@ -35,34 +36,6 @@ pose_goal.position.x = 0.4
 pose_goal.position.y = 0.01
 pose_goal.position.z = 0.6
 
-"""
-planner.plan_trajectory(pose_target=pose_goal)
-
-# add modifications
-#planner.trajectory_planner.add_uncertainty(0.08)
-planner.trajectory_planner.scale_global_speed(0.2)
-planner.trajectory_planner.apply_bezier_at(0, len(planner.trajectory_planner.times) - 1, np.array([0.5, 0]), np.array([0, 1]))
-
-# plot times
-plt.figure()
-plt.plot(planner.trajectory_planner.times)
-plt.savefig("plot_tp_times")
-
-# go!
-#planner.execute(original=False)
-"""
-from expressive_motion_generation.utils import make_point_at_task, make_point_at_task_from
-# planner.new_plan()
-# planner.plan_animation("/home/mwiebe/noetic_ws/IsaacSim-ros_workspaces/noetic_ws/panda_animations/animation_happy2.yaml")
-# gaze = {'point':[1.6, 0.0, 0.6], 'move_group':'panda_arm', 'link':'panda_hand', 'axis':[0,0,1], 'up':[1,0,0],
-#         'movable': [4,5], 'from':2, 'to':18}
-# planner.apply_effects(index=0, gaze=gaze)
-# planner.plan_animation("/home/mwiebe/noetic_ws/IsaacSim-ros_workspaces/noetic_ws/panda_animations/animation_happy2.yaml")
-# #planner.plan_target(pose_goal, 'panda_arm', 1.0, 1.0, 'pose')
-# #planner.apply_effects(index=1, jitter=0.01)
-# planner.bake()
-# planner.execute()
-
 # planner.new_plan()
 # planner.plan_animation("/home/mwiebe/noetic_ws/IsaacSim-ros_workspaces/noetic_ws/panda_animations/animation_happy2.yaml")
 # # planner.at(0).add_effects(GazeEffect([0.6, 0, 0.6], 'panda_hand', 'panda_arm', start_index=3, stop_index=17))
@@ -78,7 +51,10 @@ from expressive_motion_generation.utils import make_point_at_task, make_point_at
 # planner.execute()
 
 planner.new_plan()
+print('plan anim')
 planner.plan_animation("/home/mwiebe/noetic_ws/IsaacSim-ros_workspaces/noetic_ws/panda_animations/animation_happy2.yaml")
-planner.at(0).add_effects(ExtentEffect(0.1, ['g','n','g','p','m','p','i','i'], upper_limits, lower_limits))
+planner.get_task_at(0).add_effects(ExtentEffect(0.1, ['g','n','g','p','m','p','i','i'], upper_limits, lower_limits))
+planner.get_task_at(0).add_effects(GazeEffect([0.6, 0, 0.6], 'panda_hand', 'panda_arm', start_index=3, stop_index=17))
+planner.get_task_at(0).add_effects(JitterEffect())
 planner.bake()
 planner.execute()
