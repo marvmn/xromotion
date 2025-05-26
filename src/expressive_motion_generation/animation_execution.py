@@ -108,12 +108,12 @@ class Animation:
                                  data_curves[i]["control_point0"], data_curves[i]["control_point1"])
             self.beziers.append(bezier)
         
-        # load joint orientations
-        self.joint_orientations = np.empty(len(self.joint_names))
-        self.joint_orientations[:] = np.nan
-        for i in range(len(data["joint_orientations"])):
-            joint_index = self.joint_names.index(data["joint_orientations"][i]["joint_name"])
-            self.joint_orientations[joint_index] = data["joint_orientations"][i]["position"]
+        # # load joint orientations
+        # self.joint_orientations = np.empty(len(self.joint_names))
+        # self.joint_orientations[:] = np.nan
+        # for i in range(len(data["joint_orientations"])):
+        #     joint_index = self.joint_names.index(data["joint_orientations"][i]["joint_name"])
+        #     self.joint_orientations[joint_index] = data["joint_orientations"][i]["position"]
         
         # convert to numpy arrays
         self.positions = np.array(self.positions)
@@ -173,22 +173,12 @@ class Animation:
                                    'control_point1': bezier.control_point1,
                                    'indices': bezier.indices})
         
-        # safe joint orientations
-        data['joint_orientations'] = []
-        for i in range(len(self.joint_orientations)):
-            if not self.joint_orientations[i] == np.nan:
-                data["joint_orientations"].append({'joint_name': self.joint_names[i],
-                                                   'position': self.joint_orientations[i]})
+        # # safe joint orientations
+        # data['joint_orientations'] = []
+        # for i in range(len(self.joint_orientations)):
+        #     if not self.joint_orientations[i] == np.nan:
+        #         data["joint_orientations"].append({'joint_name': self.joint_names[i],
+        #                                            'position': self.joint_orientations[i]})
 
         # finished building dictionary, now save this in the yaml file
         print(dump(data), file=file)
-
-    def set_joint_pointing_orientations(self, joint_names, joint_orientations):
-        """
-        Set the configuration of each joint given in joint_names that would
-        point the joint forward orthogonal to the previous joint.
-        """
-        assert(len(joint_orientations) == len(joint_names))
-        for i in range(len(joint_names)):
-            self.joint_orientations[self.joint_names.index[joint_names[i]]] = joint_orientations[i]
-
