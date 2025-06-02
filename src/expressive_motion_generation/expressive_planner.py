@@ -331,7 +331,8 @@ class ExpressivePlanner:
                 positions[i, j] = points[i].positions[j]
         
         # initialize trajectory planner and append it to list
-        trajectory_planner = TrajectoryPlanner(times, positions)
+        trajectory_planner = TrajectoryPlanner(times, positions,
+                                               self.robot.get_group(move_group).get_active_joints())
         return trajectory_planner
 
     def execute(self, original=False):
@@ -372,7 +373,7 @@ class ExpressivePlanner:
         # when everything is done, return True
         return True
 
-    def _execute_trajectory(self, trajectory_planner, original=False):
+    def _execute_trajectory(self, trajectory_planner: TrajectoryPlanner, original=False):
         """
         Execute the given trajectory planner
         """
@@ -383,7 +384,7 @@ class ExpressivePlanner:
 
         # initialize joint state
         joint_state = JointState()
-        joint_state.name = self.joint_names
+        joint_state.name = trajectory_planner.joint_names
         joint_state.header.frame_id = self.frame_id
         
         if self.fake_display:
@@ -402,9 +403,6 @@ class ExpressivePlanner:
             # set joint position
             joint_state.position = trajectory_planner.get_position_at(time.time() - time_start, 
                                                                       original=original).tolist()
-            
-            if len(joint_state.position) < len(joint_state.name):
-                joint_state.position += [0] * (len(joint_state.name) - len(joint_state.position))
                 
             # publish and wait for next tick
             if self.fake_display:

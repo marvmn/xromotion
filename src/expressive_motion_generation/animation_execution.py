@@ -66,7 +66,8 @@ class Animation:
         """
 
         # load trajectory planner
-        self.trajectory_planner = TrajectoryPlanner(self.times, self.positions)
+        print(f"Reloading Trajectory for {self.name}, joints = {self.joint_names}")
+        self.trajectory_planner = TrajectoryPlanner(self.times, self.positions, self.joint_names)
 
         # fill up to make bezier curves possible
         self.original_indices = self.trajectory_planner.fill_up(20)

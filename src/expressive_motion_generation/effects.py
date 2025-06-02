@@ -18,6 +18,27 @@ class Effect:
         self.start_index: int = start_index
         self.stop_index: int = stop_index
     
+    def get_indices(self, trajectory_planner: TrajectoryPlanner):
+        """
+        Compute the start and stop indices based on the trajectory planner
+        that they should be applied on. This makes sure that negative
+        indices get handled correctly.
+
+        Parameters:
+        - trajectory_planner: Trajectory Planner that the effect should be applied on
+
+        Returns:
+        - start_index: New start index
+        - stop_index: New stop index
+        """
+        start_index = self.start_index
+        if start_index < 0:
+            start_index += len(trajectory_planner.times)
+        stop_index = self.stop_index
+        if stop_index < 0:
+            stop_index += len(trajectory_planner.times)
+        return start_index, stop_index
+    
     def apply(self, trajectory_planner: TrajectoryPlanner, animation: Optional[Animation] = None):
         """ Apply this effect to a given trajectory planner.
          If the task type is animation, providing the animation can add
@@ -59,7 +80,7 @@ class GazeEffect(Effect):
         - link: Name of link to point towards point
         - move_group: MoveIt move group that uses the current joint group
         - axis: Direction vector of axis to point towards point
-        - movable: List of joint indices to use for the action. If none are specified, use all joints.
+        - movable: List of joint names to use for the action. If none are specified, use all joints.
         - start_index: Keyframe index where the effect should begin.
         - stop_index: Keyframe index where the effect should end. If this is -1, the last keyframe will be used. 
         """
@@ -71,13 +92,17 @@ class GazeEffect(Effect):
         self.movable = movable
     
     def apply(self, trajectory_planner: TrajectoryPlanner, animation: Optional[Animation] = None):
+
+        # first get indices
+        start_index, stop_index = self.get_indices(trajectory_planner)
+
         # if animation, only apply on keyframes and then fill up again
         if not animation is None:
 
-            new_trajectory_planner = TrajectoryPlanner(animation.times, animation.positions)
+            new_trajectory_planner = TrajectoryPlanner(animation.times, animation.positions, animation.joint_names)
             new_trajectory_planner.add_gaze(self.point, self.link, self.move_group, 
-                                            self.axis, self.movable, self.start_index, 
-                                            self.stop_index)
+                                            self.axis, self.movable, start_index, 
+                                            stop_index)
 
             # apply to old animation
             animation.positions = new_trajectory_planner.positions
@@ -90,8 +115,8 @@ class GazeEffect(Effect):
         # if not, just apply
         else:
             trajectory_planner.add_gaze(self.point, self.link, self.move_group, 
-                                        self.axis, self.movable, self.start_index, 
-                                        self.stop_index)
+                                        self.axis, self.movable, start_index, 
+                                        stop_index)
 
 class ExtentEffect(Effect):
     """ Extent effect: Modifies the trajectory to follow a wider or narrower path. """
@@ -116,20 +141,6 @@ class ExtentEffect(Effect):
         self.amount = amount
         self.limit_upper = upper_joint_limits
         self.limit_lower = lower_joint_limits
-        # self.transform = np.ones((len(mode_configuration), 2))
-
-        # # go through each joint and assign transformation
-        # for i in range(len(mode_configuration)):
-
-        #     # check configuration and apply
-        #     if mode_configuration[i] == 'p':
-        #         self.transform[i] = [1 - amount, amount * upper_joint_limits[i]]
-        #     elif mode_configuration[i] == 'n':
-        #         self.transform[i] = [1 - amount, amount * lower_joint_limits[i]]
-        #     elif mode_configuration[i] == 'g':
-        #         self.transform[i] = [amount, 0]
-        #     else:
-        #         self.transform[i] = [1, 0]
     
     def _gcd(self, a: float, b: float, limit: float = 0.0001) :
         """

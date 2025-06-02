@@ -18,7 +18,8 @@ def make_point_at_task(robot: RobotCommander, move_group: str, point: np.ndarray
         """
         # create targetplan to wrap this goal
         # find pose
-        trajectory_planner = TrajectoryPlanner([0.0], [robot.get_group(move_group).get_current_joint_values()])
+        trajectory_planner = TrajectoryPlanner([0.0], [robot.get_group(move_group).get_current_joint_values()],
+                                               robot.get_group(move_group).get_active_joints())
         positions = trajectory_planner._get_pointing_joint_state(move_group, robot, 0, link,
                                                                 point, axis)
         
@@ -55,10 +56,12 @@ def make_point_at_task_from(robot: RobotCommander, move_group: str, point: np.nd
     animation.times = np.array([0.0])
     animation.positions = [before_state]
     animation.move_group = move_group
+    animation.joint_names = robot.get_group(move_group).get_active_joints()
     animation.name = f"PointAtTask-({point})"
 
     # find pointing pose
-    positions = TrajectoryPlanner(animation.times, animation.positions)._get_pointing_joint_state(move_group, robot, 0, link,
+    positions = TrajectoryPlanner(animation.times, animation.positions,
+                                  animation.joint_names)._get_pointing_joint_state(move_group, robot, 0, link,
                                                                                                   point, axis)
     
     # append to animation at specified time and return!

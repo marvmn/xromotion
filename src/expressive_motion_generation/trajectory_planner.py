@@ -21,11 +21,14 @@ from stack_of_tasks.robot_model.actuators import DummyActuator
 
 class TrajectoryPlanner:
 
-    def __init__(self, times, positions):
+    def __init__(self, times, positions, joint_names=[]):
         """
         Initialize trajectory planner.
-        times -- Array with timestamps for the keyframes
-        positions -- Array with joint positions for the keyframes
+
+        Parameters:
+        - times: Array with timestamps for the keyframes
+        - positions: Array with joint positions for the keyframes
+        - joint_names: List of joint names
         """
         # set true, unmodified times
         self.true_times = times
@@ -42,6 +45,9 @@ class TrajectoryPlanner:
         # indices of original positions in case the trajectory was filled up
         # with interpolated values
         self.original_indices = range(len(times))
+
+        # joint names that the joint positions are given for
+        self.joint_names = joint_names
 
         # When the last point of the trajectory is reached, done becomes True
         self.done = False
@@ -92,6 +98,7 @@ class TrajectoryPlanner:
         - link: Name of the link that should look at the point. If None is given, use the end effector.
         - move_group: Name of the move_group to use for the IK computation
         - axis: The axis that should be pointed to the point
+        - movable_joints: Names of the joints that should be moved to achieve pose
         - from_index: Gaze will be applied on keyframes from this index onwards.
         - to_index: If not -1, Gaze will be applied from from_index to this index.
         """
