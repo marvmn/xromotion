@@ -78,10 +78,11 @@ class Animation:
         if self.relative and base_position is not None:
 
             # first check that the base position has the correct length
-            assert(len(base_position) == len(self.positions[0]))
+            assert(len(base_position) == len(self.positions[0])), f"Base Positions has the wrong length: {len(base_position)} \
+                (Should be {len(self.positions[0])})"
 
             # add the base position to every position in the trajectory
-            matrix = np.tile(base_position, len(self.times))
+            matrix = np.tile(base_position, (len(self.times), 1))
             self.trajectory_planner.positions += matrix
 
         # fill up to make bezier curves possible

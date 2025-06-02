@@ -92,8 +92,9 @@ def convert_animation_to_relative(animation: Animation):
     base_position = animation.positions[0]
 
     # subtract this position from all other positions
-    matrix = np.tile(base_position, len(animation.times))
+    matrix = np.tile(base_position, (len(animation.times), 1))
     animation.positions -= matrix
 
     # success, return True!
+    animation.relative = True
     return True
