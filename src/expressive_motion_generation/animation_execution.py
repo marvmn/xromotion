@@ -40,6 +40,7 @@ class Animation:
             self.times = np.array([])
             self.positions = np.array([])
             self.beziers = []
+            self.relative = False
 
             # apply to trajectory planner
             self._reload_trajectory()
@@ -60,14 +61,28 @@ class Animation:
             # finally close file
             file.close()
 
-    def _reload_trajectory(self):
+    def _reload_trajectory(self, base_position=None):
         """
-        Load trajectory planner and apply bezier curves
+        Load trajectory planner and apply bezier curves. If this is a relative animation,
+        a base position can be given. The relative animation will then be computed from the
+        given position.
+
+        Parameters:
+        - base_position: If not None, relative animations will be applied from this position
         """
 
         # load trajectory planner
-        print(f"Reloading Trajectory for {self.name}, joints = {self.joint_names}")
         self.trajectory_planner = TrajectoryPlanner(self.times, self.positions, self.joint_names)
+
+        # if relative and base position is given, compute absolute positions
+        if self.relative and base_position is not None:
+
+            # first check that the base position has the correct length
+            assert(len(base_position) == len(self.positions[0]))
+
+            # add the base position to every position in the trajectory
+            matrix = np.tile(base_position, len(self.times))
+            self.trajectory_planner.positions += matrix
 
         # fill up to make bezier curves possible
         self.original_indices = self.trajectory_planner.fill_up(20)
@@ -90,6 +105,7 @@ class Animation:
         self.move_group = data["header"]["move_group"]
         self.joint_names = data["trajectory"]["joint_names"]
         self.frame_id = data["trajectory"]["header"]["frame_id"]
+        self.relative = data["header"]["relative"]
 
         # load trajectory
         self.positions = []
@@ -108,13 +124,6 @@ class Animation:
             bezier = BezierCurve((data_curves[i]["indices"][0], data_curves[i]["indices"][1]), 
                                  data_curves[i]["control_point0"], data_curves[i]["control_point1"])
             self.beziers.append(bezier)
-        
-        # # load joint orientations
-        # self.joint_orientations = np.empty(len(self.joint_names))
-        # self.joint_orientations[:] = np.nan
-        # for i in range(len(data["joint_orientations"])):
-        #     joint_index = self.joint_names.index(data["joint_orientations"][i]["joint_name"])
-        #     self.joint_orientations[joint_index] = data["joint_orientations"][i]["position"]
         
         # convert to numpy arrays
         self.positions = np.array(self.positions)
@@ -152,7 +161,8 @@ class Animation:
 
         # save animation header
         data['header'] = {'animation_name': self.name,
-                          'move_group': self.move_group}
+                          'move_group': self.move_group,
+                          'relative': self.relative}
         
         # save trajectory
         trajectory = JointTrajectory(joint_names=self.joint_names)
@@ -173,13 +183,6 @@ class Animation:
             data['curves'].append({'control_point0': bezier.control_point0,
                                    'control_point1': bezier.control_point1,
                                    'indices': bezier.indices})
-        
-        # # safe joint orientations
-        # data['joint_orientations'] = []
-        # for i in range(len(self.joint_orientations)):
-        #     if not self.joint_orientations[i] == np.nan:
-        #         data["joint_orientations"].append({'joint_name': self.joint_names[i],
-        #                                            'position': self.joint_orientations[i]})
 
         # finished building dictionary, now save this in the yaml file
         print(dump(data), file=file)

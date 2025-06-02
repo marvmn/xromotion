@@ -70,3 +70,30 @@ def make_point_at_task_from(robot: RobotCommander, move_group: str, point: np.nd
     animation.positions = np.array(animation.positions)
     animation._reload_trajectory()
     return Task(animation)
+
+
+def convert_animation_to_relative(animation: Animation):
+    """
+    Convert an absolute animation to a relative animation, based on the first keyframe.
+
+    Parameters:
+    - animation: Absolute animation to convert
+
+    Returns:
+    - success: True, if conversion successful, otherwise false.
+    """
+
+    # check if animation is already relative
+    if animation.relative:
+        print(f"Animation {animation.name} is already relative! Conversion failed.")
+        return False
+    
+    # extract first position
+    base_position = animation.positions[0]
+
+    # subtract this position from all other positions
+    matrix = np.tile(base_position, len(animation.times))
+    animation.positions -= matrix
+
+    # success, return True!
+    return True
