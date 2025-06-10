@@ -2,7 +2,7 @@
 
 import numpy as np
 from copy import deepcopy
-from typing import Iterable, List, Optional
+from typing import Iterable, List, Optional, Union
 from expressive_motion_generation.trajectory_planner import TrajectoryPlanner
 from expressive_motion_generation.animation_execution import Animation
 
@@ -18,14 +18,14 @@ class Effect:
         self.start_index: int = start_index
         self.stop_index: int = stop_index
     
-    def get_indices(self, trajectory_planner: TrajectoryPlanner):
+    def get_indices(self, target: Union[TrajectoryPlanner, Animation]):
         """
         Compute the start and stop indices based on the trajectory planner
         that they should be applied on. This makes sure that negative
         indices get handled correctly.
 
         Parameters:
-        - trajectory_planner: Trajectory Planner that the effect should be applied on
+        - target: Trajectory Planner or animation that the effect should be applied on
 
         Returns:
         - start_index: New start index
@@ -33,10 +33,11 @@ class Effect:
         """
         start_index = self.start_index
         if start_index < 0:
-            start_index += len(trajectory_planner.times)
+            start_index += len(target.times)
         stop_index = self.stop_index
         if stop_index < 0:
-            stop_index += len(trajectory_planner.times)
+            stop_index += len(target.times)
+
         return start_index, stop_index
     
     def apply(self, trajectory_planner: TrajectoryPlanner, animation: Optional[Animation] = None):
@@ -47,7 +48,8 @@ class Effect:
 
 class JitterEffect(Effect):
     """ Jitter effect: Adds shakiness to the motion. Amount indicates the maximum modification value
-     that is added or subtracted from the joint values in radians. """
+        that is added or subtracted from the joint values in radians. The randomness is scaled down at 
+        the beginning and the end to avoid conflicts with the functional objective."""
 
     def __init__(self, amount: float = 0.01, fill: int = 0,
                  start_index:int = 0, stop_index:int = -1):
@@ -61,11 +63,36 @@ class JitterEffect(Effect):
         super().__init__(start_index, stop_index)
         self.amount = amount
         self.fill = fill
+        self.start_index = start_index
+        self.stop_index = stop_index
     
     def apply(self, trajectory_planner: TrajectoryPlanner, animation: Optional[Animation] = None):
+
+        start, stop = self.get_indices(animation)
+
+        if animation is not None and animation.original_indices:
+            start = animation.original_indices[start]
+            stop = animation.original_indices[stop]
+
+        # fill up if needed
         if self.fill > 0:
             trajectory_planner.fill_up(self.fill)
-        trajectory_planner.add_jitter(self.amount)
+
+        # first, generate random summands for every position
+        summands = np.random.normal(0.0, self.amount, trajectory_planner.positions[start:stop+1].shape)
+
+        # make the effect fade in and out at the beginning and end of the motion
+        # to ensure that the start and end point of the motion stay the same
+        parabola = -0.05 * (trajectory_planner.times[stop] - trajectory_planner.times[start]) \
+            * trajectory_planner.times[start:stop+1] \
+            * (trajectory_planner.times[start:stop+1] - (trajectory_planner.times[stop] - trajectory_planner.times[start]))
+        cut = np.min([np.ones(parabola.shape), parabola], axis=0)
+        
+        # apply to positions
+        trajectory_planner.positions[start:stop+1] += (summands.T * cut).T
+
+        # finally, scale down global scale a little
+        trajectory_planner.scale_global_speed(1.0 + min(self.amount / 2, 0.3))
 
 
 class GazeEffect(Effect):
@@ -98,6 +125,8 @@ class GazeEffect(Effect):
 
         # if animation, only apply on keyframes and then fill up again
         if not animation is None:
+
+            start_index, stop_index = self.get_indices(animation)
 
             new_trajectory_planner = TrajectoryPlanner(animation.times, animation.positions, animation.joint_names)
             new_trajectory_planner.add_gaze(self.point, self.link, self.move_group, 

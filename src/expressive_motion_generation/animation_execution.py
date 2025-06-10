@@ -27,7 +27,7 @@ class BezierCurve:
 
 class Animation:
 
-    def __init__(self, animation_path):
+    def __init__(self, animation_path = None):
         """
         Initializes and loads animation from the specified path if not None
         """

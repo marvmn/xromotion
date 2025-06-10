@@ -4,7 +4,8 @@ from expressive_motion_generation.animation_execution import Animation
 from expressive_motion_generation.expressive_planner import TargetPlan, Task
 from expressive_motion_generation.trajectory_planner import TrajectoryPlanner
 
-def make_point_at_task(robot: RobotCommander, move_group: str, point: np.ndarray, link: str, axis=[0,0,1]):
+def make_point_at_task(robot: RobotCommander, move_group: str, point: np.ndarray, link: str, axis=[0,0,1],
+                       movable_joints=None):
         """
         Create a task that looks at a given point in space. If a time is specified,
         the planner will make the trajectory take that time in seconds.
@@ -15,13 +16,14 @@ def make_point_at_task(robot: RobotCommander, move_group: str, point: np.ndarray
         - point: Coordinates of the point in space
         - link: Name of the link that should be pointed
         - axis: Axis inside the link that should be pointed at the point.
+        - movable_joints: Names of the joints that should be movable.
         """
         # create targetplan to wrap this goal
         # find pose
         trajectory_planner = TrajectoryPlanner([0.0], [robot.get_group(move_group).get_current_joint_values()],
                                                robot.get_group(move_group).get_active_joints())
         positions = trajectory_planner._get_pointing_joint_state(move_group, robot, 0, link,
-                                                                point, axis)
+                                                                point, axis, movable_joints)
         
         # check if any joint state is close to the limit, because in that case MoveIt will mark
         # the joint state as invalid.
@@ -37,19 +39,23 @@ def make_point_at_task(robot: RobotCommander, move_group: str, point: np.ndarray
         return Task(target_plan)
 
 def make_point_at_task_from(robot: RobotCommander, move_group: str, point: np.ndarray, link: str, before_state: np.ndarray, 
-                            time: float = 3.0, axis=[0,0,1]):
+                            time: float = 3.0, axis=[0,0,1], movable_joints=None):
     """
     Create a task that looks at a given point in space. If a time is specified,
-        the planner will make the trajectory take that time in seconds.
+    the planner will make the trajectory take that time in seconds.
 
-        Parameters:
-        - robot: RobotCommander for the robot
-        - move_group: Name of the used move group
-        - point: Coordinates of the point in space
-        - link: Name of the link that should be pointed
-        - before_state: Joint state that should be the beginning of the motion
-        - time: Time that the trajectory should take to get from before_state to the pointing pose
-        - axis: Axis inside the link that should be pointed at the point.
+    Parameters:
+    - robot: RobotCommander for the robot
+    - move_group: Name of the used move group
+    - point: Coordinates of the point in space
+    - link: Name of the link that should be pointed
+    - before_state: Joint state that should be the beginning of the motion
+    - time: Time that the trajectory should take to get from before_state to the pointing pose
+    - axis: Axis inside the link that should be pointed at the point.
+    - movable_joints: Names of the joints that should be movable.
+
+    Return:
+    - Animation Task with the first frame being the before_state, the second being the pointing state.
     """
     # create animation to wrap in
     animation = Animation(None)
@@ -62,7 +68,7 @@ def make_point_at_task_from(robot: RobotCommander, move_group: str, point: np.nd
     # find pointing pose
     positions = TrajectoryPlanner(animation.times, animation.positions,
                                   animation.joint_names)._get_pointing_joint_state(move_group, robot, 0, link,
-                                                                                                  point, axis)
+                                                                                   point, axis, movable_joints)
     
     # append to animation at specified time and return!
     animation.times = np.append(animation.times, time)

@@ -306,6 +306,8 @@ class ExpressivePlanner:
             self.robot.get_group(move_group).set_joint_value_target(target)
         elif target_type == 'orientation':
             self.robot.get_group(move_group).set_orientation_target(target)
+        elif target_type == 'name':
+            self.robot.get_group(move_group).set_named_target(target)
         else:
             self.robot.get_group(move_group).set_position_target(target)
 
