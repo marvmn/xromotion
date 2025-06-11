@@ -397,7 +397,7 @@ class ExpressivePlanner:
             # if this task is not baked, calculate motion and apply effects
             if not task.is_baked():
                 # if element is animation instance, the trajectory planner is ready to use
-                if task.is_animation():
+                if task.is_animation() or task.is_wait():
                     # TODO transition from last position?
                     task.bake()
                 

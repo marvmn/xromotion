@@ -68,9 +68,10 @@ class JitterEffect(Effect):
     
     def apply(self, trajectory_planner: TrajectoryPlanner, animation: Optional[Animation] = None):
 
-        start, stop = self.get_indices(animation)
+        start, stop = self.get_indices(trajectory_planner)
 
         if animation is not None and animation.original_indices:
+            start, stop = self.get_indices(animation)
             start = animation.original_indices[start]
             stop = animation.original_indices[stop]
 
