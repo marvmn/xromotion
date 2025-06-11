@@ -152,6 +152,21 @@ class Animation:
         self._reload_trajectory()
         
 
+    def add_bezier(self, index0, index1, control_point0, control_point1):
+        """
+        Add a Bezier curve to this animation at the specified indices.
+
+        Parameters:
+        - index0: Start index of the interval that should be modified by the curve.
+        - index1: End index of the interval that should be modified by the curve.
+        - control_point0: XY-Coordinates of the first control point in the interval (0, 0) to (1,1)
+        - control_point1: XY-Coordinates of the second control point in the interval (0, 0) to (1,1)
+        
+        """
+        bezier = BezierCurve((index0, index1), np.array(control_point0),
+                             np.array(control_point1))
+        self.beziers.append(bezier)
+
     def save_yaml(self, file):
         """
         Save the animation data as in YAML format in the specified file

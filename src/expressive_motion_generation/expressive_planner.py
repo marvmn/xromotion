@@ -25,9 +25,10 @@ class TargetPlan:
 class Task:
     """ Defines a task to be executed in a expressive motion plan """
 
-    def __init__(self, target: Union[Animation, TargetPlan], trajectory_planner: Optional[TrajectoryPlanner]=None):
+    def __init__(self, target: Union[Animation, TargetPlan, float], trajectory_planner: Optional[TrajectoryPlanner]=None):
         """
-        Target is either an Animation or a TargetPlan defining the planned motion.
+        Target is either an Animation, a TargetPlan defining the planned motion, or a float
+        defining a wait interval.
         If the trajectory planner is already ready, it defines this task as baked.
         """
         self.target = target
@@ -56,6 +57,10 @@ class Task:
         # set trajectory planner
         if self.is_animation():
             self.trajectory_planner = self.target.trajectory_planner
+        elif self.is_wait():
+            self.trajectory_planner = TrajectoryPlanner([0, self.target],
+                                                        np.array([[], []]))
+            return
         else:
             if trajectory_planner is None:
                 raise ValueError("Trajectory planner must not be None if this is not an animation.")
@@ -117,17 +122,32 @@ class Task:
     def is_animation(self):
         """ Is this task an animation? """
         return type(self.target) == Animation
+    
+    def is_wait(self):
+        """ Is this task a pause interval? """
+        return type(self.target) == float
 
     def get_last_joint_state(self):
         """ Returns last joint state for this task """
-        if self.is_baked():
+        if self.is_wait():
+            return None
+        if self.is_baked() :
             return self.trajectory_planner.positions[-1]
         elif self.is_animation():
             return self.target.positions[-1]
-        return None
+        elif self.target.target_type == 'joint':
+            return self.target.target
+        else:
+            return None
+            
 
     def __str__(self):
-        target_type = f"Animation {self.target.name}" if self.is_animation() else f"Target ({self.target.target_type}) to {self.target.target}"
+        if self.is_animation():
+            target_type = f"Animation {self.target.name}"
+        elif self.is_wait():
+            target_type = f"Wait {self.target}s"
+        else:
+            target_type = f"Target ({self.target.target_type}) to {self.target.target}"
         baked = "Baked" if self.is_baked() else "Not Baked"
         return f'Task: {target_type} - {baked}'
 
@@ -185,7 +205,22 @@ class ExpressivePlanner:
 
         # check if animation was successfully loaded
         self.plan.append(task)
+        return True
     
+    def plan_pause(self, time: float) -> bool:
+        """
+        Plan a pause interval.
+
+        Parameters:
+        - time: Time to wait in seconds
+        
+        Returns:
+        - True if successful, otherwise False.
+        """
+        task = Task(time)
+        self.plan.append(task)
+        return True
+
     def plan_target(self, target, move_group=None, velocity_scaling = None, acceleration_scaling = None, target_type='pose'):
         """
         Add planning a motion to a target pose or joint goal. If move_group is None,
@@ -240,15 +275,24 @@ class ExpressivePlanner:
             return None
         return self.plan[index]
 
-    def get_last_joint_state(self):
+    def get_last_joint_state(self, index=-1):
         """ If there are any elements in the task, return the joint state that the current plan will end in """
-        if not self.plan:
+        if not self.plan or abs(index) > len(self.plan):
             return None
         else:
-            state = self.plan[-1].get_last_joint_state()
+            if self.plan[index].is_wait():
+                return self.get_last_joint_state(index - 1)
+            state = self.plan[index].get_last_joint_state()
             if state is None:
-                self.plan[-1].bake()
-                return self.plan[-1].get_last_joint_state()
+                self.plan[index].bake()
+                state = self.plan[index].get_last_joint_state()
+                if state == None:
+                    print("[ExpressivePlanner] Last joint state could not be computed. Prebaking plan.")
+                    self.bake()
+                    state = self.plan[index].get_last_joint_state()
+                    if state == None:
+                        raise RuntimeError("[ExpressivePlanner] Last joint state could not be computed.")
+                return state
             else:
                 return state
 
@@ -261,8 +305,8 @@ class ExpressivePlanner:
         # go through each element
         for task in self.plan:
             
-            # if element is animation instance, the trajectory planner is ready to use
-            if task.is_animation():
+            # if element is animation instance or pause, the trajectory planner is ready to use
+            if task.is_animation() or task.is_wait():
                 # TODO transition from last position?
                 task.bake()
             
@@ -277,9 +321,10 @@ class ExpressivePlanner:
                 task.bake(trajectory_planner)
 
             # compute last position
-            last_position = RobotState()
-            last_position.joint_state.position = task.trajectory_planner.positions[-1]
-            last_position.joint_state.name = self.robot.get_group(task.target.move_group).get_active_joints()
+            if not task.is_wait():
+                last_position = RobotState()
+                last_position.joint_state.position = task.trajectory_planner.positions[-1]
+                last_position.joint_state.name = self.robot.get_group(task.target.move_group).get_active_joints()
 
     def plan_trajectory(self, target, move_group, target_type, start_state=None, velocity_scaling=None, acceleration_scaling=None):
         """
@@ -337,7 +382,7 @@ class ExpressivePlanner:
                                                self.robot.get_group(move_group).get_active_joints())
         return trajectory_planner
 
-    def execute(self, original=False):
+    def execute(self, original=False, debug_output=False):
         """
         Execute the current plan through the given JointState publisher.
         """
@@ -345,6 +390,9 @@ class ExpressivePlanner:
 
         # go through each element, plan and execute it!
         for task in self.plan:
+
+            if debug_output:
+                print("Executing task", task)
 
             # if this task is not baked, calculate motion and apply effects
             if not task.is_baked():
@@ -364,9 +412,10 @@ class ExpressivePlanner:
                     task.bake(trajectory_planner)
 
             # compute last position
-            last_position = RobotState()
-            last_position.joint_state.position = task.get_last_joint_state()
-            last_position.joint_state.name = self.robot.get_group(task.target.move_group).get_active_joints()
+            if not task.is_wait():
+                last_position = RobotState()
+                last_position.joint_state.position = task.get_last_joint_state()
+                last_position.joint_state.name = self.robot.get_group(task.target.move_group).get_active_joints()
 
             # execute
             self._execute_trajectory(task.trajectory_planner)
