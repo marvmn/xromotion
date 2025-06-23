@@ -31,10 +31,15 @@ class Effect:
         - start_index: New start index
         - stop_index: New stop index
         """
-        start_index = self.start_index
+        if not target.original_indices:
+            target.original_indices = range(len(target.times))
+            
+        print(target.original_indices, self.start_index, self.stop_index)
+        
+        start_index = target.original_indices[self.start_index]
         if start_index < 0:
             start_index += len(target.times)
-        stop_index = self.stop_index
+        stop_index = target.original_indices[self.stop_index]
         if stop_index < 0:
             stop_index += len(target.times)
 
@@ -67,17 +72,19 @@ class JitterEffect(Effect):
         self.stop_index = stop_index
     
     def apply(self, trajectory_planner: TrajectoryPlanner, animation: Optional[Animation] = None):
+        
+        # fill up if needed
+        if self.fill > 0:
+            trajectory_planner.fill_up(self.fill)
 
         start, stop = self.get_indices(trajectory_planner)
 
         if animation is not None and animation.original_indices:
             start, stop = self.get_indices(animation)
-            start = animation.original_indices[start]
-            stop = animation.original_indices[stop]
-
-        # fill up if needed
-        if self.fill > 0:
-            trajectory_planner.fill_up(self.fill)
+            # start = animation.original_indices[start]
+            # stop = animation.original_indices[stop]
+        
+        print(start, stop)
 
         # first, generate random summands for every position
         summands = np.random.normal(0.0, self.amount, trajectory_planner.positions[start:stop+1].shape)
@@ -94,6 +101,7 @@ class JitterEffect(Effect):
 
         # finally, scale down global scale a little
         trajectory_planner.scale_global_speed(1.0 + min(self.amount / 2, 0.3))
+        return summands, parabola, cut
 
 
 class GazeEffect(Effect):

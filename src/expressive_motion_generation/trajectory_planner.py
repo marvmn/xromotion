@@ -286,12 +286,14 @@ class TrajectoryPlanner:
                     added_now += 1
                 added += added_now
         
+        # add final index
+        self.original_indices.append(added + len(self.times) - 1)
+        
         # finally save new times and positions
         self.positions = new_positions
         self.times = new_times
 
         # return the indices of the original keyframes
-        self.original_indices.append(added)
         return self.original_indices
 
     def _get_pointing_joint_state(self, move_group: str, robot: RobotCommander, time, link, point, 
