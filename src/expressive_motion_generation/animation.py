@@ -1,4 +1,5 @@
 from expressive_motion_generation.trajectory import Trajectory
+from expressive_motion_generation.effects import BezierCurveEffect
 import json
 import os
 import numpy as np
@@ -91,9 +92,8 @@ class Animation:
         # go through beziers and add them to trajectory
         for i in range(len(self.beziers)):
             curve = self.beziers[i]
-            self.trajectory_planner.apply_bezier_at(self.original_indices[curve.indices[0]], 
-                                                    self.original_indices[curve.indices[1]], 
-                                                    curve.control_point0, curve.control_point1)
+            effect = BezierCurveEffect(curve.indices[0], curve.indices[1], curve.control_point0, curve.control_point1)
+            effect.apply(self.trajectory_planner, self)
 
     def _load_yaml(self, file):
         """

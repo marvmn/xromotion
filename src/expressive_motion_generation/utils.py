@@ -3,6 +3,7 @@ from moveit_commander.robot import RobotCommander
 from expressive_motion_generation.animation import Animation
 from expressive_motion_generation.expressive_planner import TargetPlan, Task
 from expressive_motion_generation.trajectory import Trajectory
+from expressive_motion_generation.effects import GazeEffect
 
 def make_point_at_task(robot: RobotCommander, move_group: str, point: np.ndarray, link: str, axis=[0,0,1],
                        movable_joints=None):
@@ -22,7 +23,8 @@ def make_point_at_task(robot: RobotCommander, move_group: str, point: np.ndarray
         # find pose
         trajectory_planner = Trajectory([0.0], [robot.get_group(move_group).get_current_joint_values()],
                                                robot.get_group(move_group).get_active_joints())
-        positions = trajectory_planner._get_pointing_joint_state(move_group, robot, 0, link,
+        effect = GazeEffect(point, link, move_group, axis, movable_joints)
+        positions = effect._get_pointing_joint_state(move_group, robot, 0, link,
                                                                 point, axis, movable_joints)
         
         # check if any joint state is close to the limit, because in that case MoveIt will mark
@@ -66,8 +68,7 @@ def make_point_at_task_from(robot: RobotCommander, move_group: str, point: np.nd
     animation.name = f"PointAtTask-({point})"
 
     # find pointing pose
-    positions = Trajectory(animation.times, animation.positions,
-                                  animation.joint_names)._get_pointing_joint_state(move_group, robot, 0, link,
+    positions = GazeEffect(point, link, move_group, axis, movable_joints)._get_pointing_joint_state(move_group, robot, 0, link,
                                                                                    point, axis, movable_joints)
     
     # append to animation at specified time and return!

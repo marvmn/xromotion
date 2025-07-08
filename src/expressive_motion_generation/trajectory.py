@@ -1,6 +1,4 @@
 import copy
-import time
-import rospy
 import numpy as np
 from typing import Optional
 import tf.transformations as tf
@@ -8,16 +6,6 @@ from sensor_msgs.msg import JointState
 from moveit_commander.robot import RobotCommander
 from moveit_msgs.msg import PositionIKRequest, Constraints, JointConstraint
 from moveit_msgs.srv import GetPositionIKResponse, GetPositionFKRequest, GetPositionFK, GetPositionIK
-
-# Stack of Tasks imports
-from stack_of_tasks.tasks.Eq_Tasks import *
-from stack_of_tasks.config import Configuration
-from stack_of_tasks.controller import Controller
-from stack_of_tasks.ref_frame import Origin, Offset
-from stack_of_tasks.solver.OSQPSolver import OSQPSolver
-from stack_of_tasks.ref_frame.frames import RobotRefFrame
-from stack_of_tasks.tasks.base import TaskSoftnessType, RelativeType
-from stack_of_tasks.robot_model.actuators import DummyActuator
 
 class Trajectory:
 
@@ -64,65 +52,6 @@ class Trajectory:
         """
         for i in range(len(self.times)):
             self.times[i] = self.times[i] * scalar
-    
-    def add_jitter(self, amount=0.05):
-        """
-        Applies a certain amount of randomness to a motion to make it seem
-        less confident. The randomness is scaled down at the beginning and
-        the end to avoid conflicts with the functional objective.
-
-        Parameters:
-        - amount: Maximum value that gets added to or subtracted from a joint position.
-        """
-
-        # first, generate random summands for every position
-        summands = np.random.normal(0.0, amount, self.positions.shape)
-
-        # make the effect fade in and out at the beginning and end of the motion
-        # to ensure that the start and end point of the motion stay the same
-        parabola = -0.05 * self.times[-1] * self.times * (self.times - self.times[-1])
-        cut = np.min([np.ones(parabola.shape), parabola], axis=0)
-        
-        # apply to positions
-        self.positions += (summands.T * cut).T
-
-        # finally, scale down global scale a little
-        self.scale_global_speed(1.0 + max(amount / 2, 0.3))
-
-    def add_gaze(self, point, link, move_group, axis=[0,0,1], movable_joints=None, from_index=0, to_index=-1):
-        """
-        Makes the specified link point at the given point throughout the trajectory
-        
-        Parameters:
-        - point: Point to look at
-        - link: Name of the link that should look at the point. If None is given, use the end effector.
-        - move_group: Name of the move_group to use for the IK computation
-        - axis: The axis that should be pointed to the point
-        - movable_joints: Names of the joints that should be moved to achieve pose
-        - from_index: Gaze will be applied on keyframes from this index onwards.
-        - to_index: If not -1, Gaze will be applied from from_index to this index.
-        """
-        
-        # prepare moveit robot interface
-        robot = RobotCommander()
-        end_index = len(self.original_indices) - 1 if to_index == -1 else to_index
-
-        full_time = 0
-
-        # go through every keyframe
-        for i in range(from_index, end_index + 1):
-            t = time.time()
-
-            # apply pointing pose
-            joint_state = self._get_pointing_joint_state(move_group, robot, self.original_indices[i], link, point, axis, 
-                                                             movable_joints)
-            
-            print(f"[Gaze Effect] Converged for {i}/{end_index} in {time.time() - t}", end='\r')
-            full_time += time.time() - t
-
-            self.positions[self.original_indices[i]] = joint_state
-        
-        print(f"[Gaze Effect] Finished gaze calculation in {round(full_time, 3)}s")
 
     def enforce_joint_limits(self, robot: RobotCommander, move_group: Optional[str] = None):
         """
@@ -206,51 +135,7 @@ class Trajectory:
 
         # interpolate position
         return pos0 + (pos1 - pos0) * scalar
-
-    def apply_bezier_at(self, index0: int, index1: int, cp0: np.ndarray, cp1: np.ndarray):
-        """
-        Scales the velocity of the motion between two keyframes according to
-        a Bézier curve. The curve assumes the position at index0 to be (0,0)
-        and the position at index1 to be (1,1) to unify the choice of the
-        control points cp0 and cp1 across different joint states.
-
-        Parameters:
-        - index0: Index of the first keyframe of the interval
-        - index1: Index of the second keyframe of the interval
-        - cp0: The first control point in the interval
-        - cp1: The second control point in the interval
-        """
-
-        # check if the two points are the same
-        if (self.times[index0] == self.times[index1]):
-            return
-
-        # first, calculate the bezier curve with n points
-        n = 20
-
-        bezier_fn = lambda t: (1 - t)**3 * np.array([0,0]) + 3*(1 - t)**2 * t * cp0 + 3 * (1 - t) * t**2 * cp1 + t**3 * np.array([1,1])
-        curve = bezier_fn(np.linspace([0,0], [1,1], n)).T
-        #print("CURVE:\n", curve)
-
-        # now interpolate exact position for every timestamp
-        for idx in range(index1 - index0):
-            
-            # get x coordinate on the curve
-            # for that normalize the times-intervall that this curve operates on
-            x = (self.times[index0 + idx] - self.times[index0]) / (self.times[index1] - self.times[index0])
-            time = 0.0
-            if x == 0:
-                continue
-            for i in range(len(curve[0])):
-                if x <= curve[0][i]:
-                    diff = curve[0, i] - curve[0, i - 1]
-                    prog = x - curve[0, i - 1]
-                    scal = prog / diff
-                    time = curve[1, i - 1] + (curve[1, i] - curve[1, i - 1]) * scal
-                    break
-            
-            # finally apply calculated time back to times array
-            self.times[index0 + idx] = time * (self.times[index1] - self.times[index0]) + self.times[index0]
+        
 
     def fill_up(self, frequency: float):
         """
@@ -296,104 +181,6 @@ class Trajectory:
         # return the indices of the original keyframes
         return self.original_indices
 
-    def _get_pointing_joint_state(self, move_group: str, robot: RobotCommander, time, link, point, 
-                                  axis=[0,0,1], movable_joints=None):
-        """
-        Uses Stack of Tasks framework to generate a joint state that lets the given link point
-        the axis at the given point.
-
-        Parameters:
-        - move_group: Name of the move group
-        - robot: RobotCommander with the commanded robot
-        - time: Index of the base position
-        - link: Name of the pointer link
-        - point: 3D Coordinates of the point to point at
-        - axis: Direction vector of the axis to point at the point
-        - movable_joints: Joints that can be moved from the original state in order to reach pointing state
-        """
-
-        # build current robot state
-        config = Configuration(OSQPSolver, DummyActuator)
-        controller = Controller(config=config)
-        controller.robot_state.incoming_joint_values = np.zeros(len(controller.robot_state.joint_values))
-
-        skipped = 0
-        for i in range(len(robot.get_group(move_group).get_active_joints())):
-            if controller.robot_state.robot_model.active_joints[i].name in robot.get_group(move_group).get_active_joints():
-                    controller.robot_state.incoming_joint_values[i - skipped] = self.positions[time][i]
-            else:
-                skipped += 1
-
-        # build joint constraint as rho weight vector 
-        rho = np.ones(controller.robot_state.robot_model.N)
-        if movable_joints is not None:
-            for i in range(len(rho)):
-                if i in movable_joints:
-                    rho[i] = 1
-                else:
-                    rho[i] = 500
-        
-        # call stack of tasks and compute joint positions
-        joint_states = self._fake_pointer_control_loop(controller, point, link, rho, axis)
-
-        # build list with old joints
-        final_list = np.zeros(len(robot.get_group(move_group).get_active_joints()))
-        for i in range(len(robot.get_group(move_group).get_active_joints())):
-            for j in range(len(joint_states)):
-                if controller.robot_state.robot_model.active_joints[j].name == robot.get_group(move_group).get_active_joints()[i]:
-                    final_list[i] = joint_states[j]
-
-        return final_list
-        
-
-    def _fake_pointer_control_loop(self, controller: Controller, point: np.ndarray, link_name: str, rho: np.ndarray, axis=[0,0,1]):
-        """
-        Use Stack of Tasks framework and simulate a dummy robot state to iteratively compute a pointing pose that
-        respects the current joint values.
-
-        Parameters:
-        - controller: Stack of Tasks Controller to use
-        - point: Coordinates of point to look at
-        - link_name: Link that should point towards the point
-        - rho: Weight vector that defines which joints should be used for the task
-        - axis: Axis in the link that should be pointed at the point.
-        """
-
-        # prepare controller and tasks
-        # define point transformation matrix
-        point_frame = np.array([[1, 0, 0, point[0]],
-                                [0, 1, 0, point[1]],
-                                [0, 0, 1, point[2]],
-                                [0, 0, 0, 1  ]])
-
-        # define first level task at pointing at the point
-        with controller.task_hierarchy.new_level() as level:
-            level.append(RayTask(refA=RobotRefFrame(controller.robot_state, link_name=link_name), 
-                                            refB=Offset(Origin(), point_frame), 
-                                            softness_type=TaskSoftnessType.linear,
-                                            refA_axis=np.array(axis),
-                                            relType=RelativeType.RELATIVE, weight=1.0,
-                                            mode="axis + dp",
-                                            rho=rho))
-        
-        # now start a custom control loop
-        warmstart_dq = None
-        controller.solver.tasks_changed()
-
-        convergence = 0
-        last_dq = 100
-
-        while not rospy.is_shutdown_requested() and convergence < 10:
-            warmstart_dq = controller.control_step(warmstart_dq)
-            dq = np.linalg.norm(warmstart_dq)
-            if abs(dq - last_dq) <= 0.000001:
-                convergence += 1
-            else:
-                convergence = 0
-            last_dq = dq
-        
-        # converged!
-
-        return controller.robot_state.joint_values
+    
 
         
