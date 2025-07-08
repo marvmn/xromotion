@@ -1,9 +1,9 @@
 __all__ = [
-    "TrajectoryPlanner",
+    "Trajectory",
     "ExpressivePlanner",
     "Animation"
 ]
 
-from .animation_execution import Animation
+from .animation import Animation
 from .expressive_planner import ExpressivePlanner
-from .trajectory_planner import TrajectoryPlanner
+from .trajectory import Trajectory

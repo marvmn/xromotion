@@ -1,4 +1,4 @@
-from expressive_motion_generation.trajectory_planner import TrajectoryPlanner
+from expressive_motion_generation.trajectory import Trajectory
 import json
 import os
 import numpy as np
@@ -72,7 +72,7 @@ class Animation:
         """
 
         # load trajectory planner
-        self.trajectory_planner = TrajectoryPlanner(self.times, self.positions, self.joint_names)
+        self.trajectory_planner = Trajectory(self.times, self.positions, self.joint_names)
 
         # if relative and base position is given, compute absolute positions
         if self.relative and base_position is not None:

@@ -3,8 +3,8 @@
 import numpy as np
 from copy import deepcopy
 from typing import Iterable, List, Optional, Union
-from expressive_motion_generation.trajectory_planner import TrajectoryPlanner
-from expressive_motion_generation.animation_execution import Animation
+from expressive_motion_generation.trajectory import Trajectory
+from expressive_motion_generation.animation import Animation
 
 class Effect:
     """ Base class for all effects """
@@ -18,7 +18,7 @@ class Effect:
         self.start_index: int = start_index
         self.stop_index: int = stop_index
     
-    def get_indices(self, target: Union[TrajectoryPlanner, Animation]):
+    def get_indices(self, target: Union[Trajectory, Animation]):
         """
         Compute the start and stop indices based on the trajectory planner
         that they should be applied on. This makes sure that negative
@@ -45,7 +45,7 @@ class Effect:
 
         return start_index, stop_index
     
-    def apply(self, trajectory_planner: TrajectoryPlanner, animation: Optional[Animation] = None):
+    def apply(self, trajectory_planner: Trajectory, animation: Optional[Animation] = None):
         """ Apply this effect to a given trajectory planner.
          If the task type is animation, providing the animation can add
           metadata for application. """
@@ -71,7 +71,7 @@ class JitterEffect(Effect):
         self.start_index = start_index
         self.stop_index = stop_index
     
-    def apply(self, trajectory_planner: TrajectoryPlanner, animation: Optional[Animation] = None):
+    def apply(self, trajectory_planner: Trajectory, animation: Optional[Animation] = None):
         
         # fill up if needed
         if self.fill > 0:
@@ -127,7 +127,7 @@ class GazeEffect(Effect):
         self.axis = np.array(axis)
         self.movable = movable
     
-    def apply(self, trajectory_planner: TrajectoryPlanner, animation: Optional[Animation] = None):
+    def apply(self, trajectory_planner: Trajectory, animation: Optional[Animation] = None):
 
         # first get indices
         start_index, stop_index = self.get_indices(trajectory_planner)
@@ -137,7 +137,7 @@ class GazeEffect(Effect):
 
             start_index, stop_index = self.get_indices(animation)
 
-            new_trajectory_planner = TrajectoryPlanner(animation.times, animation.positions, animation.joint_names)
+            new_trajectory_planner = Trajectory(animation.times, animation.positions, animation.joint_names)
             new_trajectory_planner.add_gaze(self.point, self.link, self.move_group, 
                                             self.axis, self.movable, start_index, 
                                             stop_index)
@@ -217,7 +217,7 @@ class ExtentEffect(Effect):
             gcd = self._gcd(array[i], gcd)
         return gcd
 
-    def _get_regular_spaced_trajectory(self, trajectory_planner: TrajectoryPlanner):
+    def _get_regular_spaced_trajectory(self, trajectory_planner: Trajectory):
         """
         Compute the biggest frequency that can be used to describe the trajectory
         without loss of quality and return the same trajectory filled up to that
@@ -242,7 +242,7 @@ class ExtentEffect(Effect):
         return (np.array(new_times), np.array(new_positions))
 
         
-    def apply(self, trajectory_planner: TrajectoryPlanner, animation: Optional[Animation] = None):
+    def apply(self, trajectory_planner: Trajectory, animation: Optional[Animation] = None):
 
         # get evenly spaced trajectory
         new_times, new_positions = self._get_regular_spaced_trajectory(trajectory_planner)

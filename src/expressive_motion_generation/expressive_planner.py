@@ -4,8 +4,8 @@ import rospy
 from sensor_msgs.msg import JointState
 from moveit_msgs.msg import RobotState, DisplayRobotState
 import time
-from expressive_motion_generation.trajectory_planner import TrajectoryPlanner
-from expressive_motion_generation.animation_execution import Animation
+from expressive_motion_generation.trajectory import Trajectory
+from expressive_motion_generation.animation import Animation
 from expressive_motion_generation.effects import *
 from typing import List, Union, Optional
 
@@ -25,7 +25,7 @@ class TargetPlan:
 class Task:
     """ Defines a task to be executed in a expressive motion plan """
 
-    def __init__(self, target: Union[Animation, TargetPlan, float], trajectory_planner: Optional[TrajectoryPlanner]=None):
+    def __init__(self, target: Union[Animation, TargetPlan, float], trajectory_planner: Optional[Trajectory]=None):
         """
         Target is either an Animation, a TargetPlan defining the planned motion, or a float
         defining a wait interval.
@@ -46,7 +46,7 @@ class Task:
         """
         self.custom_effect_order = value
     
-    def bake(self, trajectory_planner: Optional[TrajectoryPlanner] = None):
+    def bake(self, trajectory_planner: Optional[Trajectory] = None):
         """
         Set trajectory planner and apply effects.
 
@@ -58,7 +58,7 @@ class Task:
         if self.is_animation():
             self.trajectory_planner = self.target.trajectory_planner
         elif self.is_wait():
-            self.trajectory_planner = TrajectoryPlanner([0, self.target],
+            self.trajectory_planner = Trajectory([0, self.target],
                                                         np.array([[], []]))
             return
         else:
@@ -378,7 +378,7 @@ class ExpressivePlanner:
                 positions[i, j] = points[i].positions[j]
         
         # initialize trajectory planner and append it to list
-        trajectory_planner = TrajectoryPlanner(times, positions,
+        trajectory_planner = Trajectory(times, positions,
                                                self.robot.get_group(move_group).get_active_joints())
         return trajectory_planner
 
@@ -424,7 +424,7 @@ class ExpressivePlanner:
         # when everything is done, return True
         return True
 
-    def _execute_trajectory(self, trajectory_planner: TrajectoryPlanner, original=False):
+    def _execute_trajectory(self, trajectory_planner: Trajectory, original=False):
         """
         Execute the given trajectory planner
         """

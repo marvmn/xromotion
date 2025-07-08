@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>panda_expressive_motion_generation</name>
+  <name>xromotion</name>
   <version>0.0.1</version>
-  <description>The panda_expressive_motion_generation uses MoveIt to generate motion trajectories and allows the user to amplify them with expressive information.</description>
+  <description>The xRomotion framework uses MoveIt to generate motion trajectories and allows the user to amplify them with expressive information. Prerecorded motion in the form of animations can also be executed.</description>
 
   <!-- One maintainer tag required, multiple allowed, one person per tag -->
   <!-- Example:  -->

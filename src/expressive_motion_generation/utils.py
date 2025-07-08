@@ -1,8 +1,8 @@
 import numpy as np
 from moveit_commander.robot import RobotCommander
-from expressive_motion_generation.animation_execution import Animation
+from expressive_motion_generation.animation import Animation
 from expressive_motion_generation.expressive_planner import TargetPlan, Task
-from expressive_motion_generation.trajectory_planner import TrajectoryPlanner
+from expressive_motion_generation.trajectory import Trajectory
 
 def make_point_at_task(robot: RobotCommander, move_group: str, point: np.ndarray, link: str, axis=[0,0,1],
                        movable_joints=None):
@@ -20,7 +20,7 @@ def make_point_at_task(robot: RobotCommander, move_group: str, point: np.ndarray
         """
         # create targetplan to wrap this goal
         # find pose
-        trajectory_planner = TrajectoryPlanner([0.0], [robot.get_group(move_group).get_current_joint_values()],
+        trajectory_planner = Trajectory([0.0], [robot.get_group(move_group).get_current_joint_values()],
                                                robot.get_group(move_group).get_active_joints())
         positions = trajectory_planner._get_pointing_joint_state(move_group, robot, 0, link,
                                                                 point, axis, movable_joints)
@@ -66,7 +66,7 @@ def make_point_at_task_from(robot: RobotCommander, move_group: str, point: np.nd
     animation.name = f"PointAtTask-({point})"
 
     # find pointing pose
-    positions = TrajectoryPlanner(animation.times, animation.positions,
+    positions = Trajectory(animation.times, animation.positions,
                                   animation.joint_names)._get_pointing_joint_state(move_group, robot, 0, link,
                                                                                    point, axis, movable_joints)
     

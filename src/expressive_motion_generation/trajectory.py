@@ -19,7 +19,7 @@ from stack_of_tasks.ref_frame.frames import RobotRefFrame
 from stack_of_tasks.tasks.base import TaskSoftnessType, RelativeType
 from stack_of_tasks.robot_model.actuators import DummyActuator
 
-class TrajectoryPlanner:
+class Trajectory:
 
     def __init__(self, times, positions, joint_names=[]):
         """
