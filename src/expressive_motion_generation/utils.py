@@ -68,7 +68,10 @@ def make_point_at_task_from(robot: RobotCommander, move_group: str, point: np.nd
     animation.name = f"PointAtTask-({point})"
 
     # find pointing pose
-    positions = GazeEffect(point, link, move_group, axis, movable_joints)._get_pointing_joint_state(move_group, robot, 0, link,
+    trajectory = Trajectory(animation.times,
+                            animation.positions,
+                            animation.joint_names)
+    positions = GazeEffect(point, link, move_group, axis, movable_joints)._get_pointing_joint_state(trajectory, move_group, robot, 0, link,
                                                                                    point, axis, movable_joints)
     
     # append to animation at specified time and return!

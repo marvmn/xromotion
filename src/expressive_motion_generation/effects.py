@@ -147,7 +147,7 @@ class GazeEffect(Effect):
             start_index, stop_index = self.get_indices(animation)
 
             new_trajectory_planner = Trajectory(animation.times, animation.positions, animation.joint_names)
-            new_trajectory_planner.add_gaze(self.point, self.link, self.move_group, 
+            self._apply(new_trajectory_planner, self.point, self.link, self.move_group, 
                                             self.axis, self.movable, start_index, 
                                             stop_index)
 
@@ -161,11 +161,11 @@ class GazeEffect(Effect):
                 
         # if not, just apply
         else:
-            trajectory_planner.add_gaze(self.point, self.link, self.move_group, 
+            self._apply(trajectory_planner, self.point, self.link, self.move_group, 
                                         self.axis, self.movable, start_index, 
                                         stop_index)
     
-    def _apply(self, point, link, move_group, axis=[0,0,1], movable_joints=None, from_index=0, to_index=-1):
+    def _apply(self, trajectory, point, link, move_group, axis=[0,0,1], movable_joints=None, from_index=0, to_index=-1):
         """
         Makes the specified link point at the given point throughout the trajectory
         
@@ -190,7 +190,7 @@ class GazeEffect(Effect):
             t = time.time()
 
             # apply pointing pose
-            joint_state = self._get_pointing_joint_state(move_group, robot, self.original_indices[i], link, point, axis, 
+            joint_state = self._get_pointing_joint_state(trajectory, move_group, robot, self.original_indices[i], link, point, axis, 
                                                              movable_joints)
             
             print(f"[Gaze Effect] Converged for {i}/{end_index} in {time.time() - t}", end='\r')
@@ -200,7 +200,7 @@ class GazeEffect(Effect):
         
         print(f"[Gaze Effect] Finished gaze calculation in {round(full_time, 3)}s")
     
-    def _get_pointing_joint_state(self, move_group: str, robot: RobotCommander, time, link, point, 
+    def _get_pointing_joint_state(self, trajectory, move_group: str, robot: RobotCommander, time, link, point, 
                                   axis=[0,0,1], movable_joints=None):
         """
         Uses Stack of Tasks framework to generate a joint state that lets the given link point
@@ -224,7 +224,7 @@ class GazeEffect(Effect):
         skipped = 0
         for i in range(len(robot.get_group(move_group).get_active_joints())):
             if controller.robot_state.robot_model.active_joints[i].name in robot.get_group(move_group).get_active_joints():
-                    controller.robot_state.incoming_joint_values[i - skipped] = self.positions[time][i]
+                    controller.robot_state.incoming_joint_values[i - skipped] = trajectory.positions[time][i]
             else:
                 skipped += 1
 
