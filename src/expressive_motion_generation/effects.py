@@ -181,8 +181,9 @@ class GazeEffect(Effect):
         
         # prepare moveit robot interface
         robot = RobotCommander()
-        end_index = len(self.original_indices) - 1 if to_index == -1 else to_index
-
+        # end_index = len(trajectory.original_indices) - 1 if to_index == -1 else to_index
+        end_index = to_index
+        
         full_time = 0
 
         # go through every keyframe
@@ -190,15 +191,15 @@ class GazeEffect(Effect):
             t = time.time()
 
             # apply pointing pose
-            joint_state = self._get_pointing_joint_state(trajectory, move_group, robot, self.original_indices[i], link, point, axis, 
+            joint_state = self._get_pointing_joint_state(trajectory, move_group, robot, i, link, point, axis, 
                                                              movable_joints)
             
             print(f"[Gaze Effect] Converged for {i}/{end_index} in {time.time() - t}", end='\r')
             full_time += time.time() - t
 
-            self.positions[self.original_indices[i]] = joint_state
-        
-        print(f"[Gaze Effect] Finished gaze calculation in {round(full_time, 3)}s")
+            trajectory.positions[i] = joint_state
+            
+        print(f"[Gaze Effect] Finished gaze calculation in {round(full_time, 3)}s           ")
     
     def _get_pointing_joint_state(self, trajectory, move_group: str, robot: RobotCommander, time, link, point, 
                                   axis=[0,0,1], movable_joints=None):
@@ -436,7 +437,7 @@ class BezierCurveEffect(Effect):
         - control_point0: The first control point in the interval
         - control_point1: The second control point in the interval
         """
-        super().__init__(self, start_index, stop_index)
+        super().__init__(start_index, stop_index)
         self.cp0 = control_point0
         self.cp1 = control_point1
     
@@ -448,7 +449,7 @@ class BezierCurveEffect(Effect):
             index0, index1 = self.get_indices(animation)
         
         # check if the two points are the same
-        if (self.times[index0] == self.times[index1]):
+        if (trajectory_planner.times[index0] == trajectory_planner.times[index1]):
             return
 
         # first, calculate the bezier curve with n points
@@ -462,7 +463,7 @@ class BezierCurveEffect(Effect):
             
             # get x coordinate on the curve
             # for that normalize the times-intervall that this curve operates on
-            x = (self.times[index0 + idx] - self.times[index0]) / (self.times[index1] - self.times[index0])
+            x = (trajectory_planner.times[index0 + idx] - trajectory_planner.times[index0]) / (trajectory_planner.times[index1] - trajectory_planner.times[index0])
             time = 0.0
             if x == 0:
                 continue
@@ -475,5 +476,5 @@ class BezierCurveEffect(Effect):
                     break
             
             # finally apply calculated time back to times array
-            self.times[index0 + idx] = time * (self.times[index1] - self.times[index0]) + self.times[index0]
+            trajectory_planner.times[index0 + idx] = time * (trajectory_planner.times[index1] - trajectory_planner.times[index0]) + trajectory_planner.times[index0]
         

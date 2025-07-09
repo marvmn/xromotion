@@ -32,6 +32,10 @@ class Task:
         If the trajectory planner is already ready, it defines this task as baked.
         """
         self.target = target
+        
+        if type(self.target) == int:
+            self.target = float(self.target)
+        
         self.trajectory_planner = trajectory_planner
         self.custom_effect_order = False
         self.effects = []
