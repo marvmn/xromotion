@@ -2,7 +2,7 @@ import moveit_commander
 import numpy as np
 import rospy
 from sensor_msgs.msg import JointState
-from moveit_msgs.msg import RobotState, DisplayRobotState
+import moveit_msgs.msg # import RobotState, DisplayRobotState
 import time
 from expressive_motion_generation.trajectory import Trajectory
 from expressive_motion_generation.animation import Animation
@@ -174,7 +174,7 @@ class ExpressivePlanner:
 
         # initialize publisher
         if fake_display:
-            self.publisher = rospy.Publisher(publish_topic, DisplayRobotState, queue_size=10)
+            self.publisher = rospy.Publisher(publish_topic, moveit_msgs.msg.DisplayRobotState, queue_size=10)
         else:
             self.publisher = rospy.Publisher(publish_topic, JointState, queue_size=10)
     
@@ -322,7 +322,7 @@ class ExpressivePlanner:
 
             # compute last position
             if not task.is_wait():
-                last_position = RobotState()
+                last_position = moveit_msgs.msg.RobotState()
                 last_position.joint_state.position = task.trajectory_planner.positions[-1]
                 last_position.joint_state.name = self.robot.get_group(task.target.move_group).get_active_joints()
 
@@ -413,7 +413,7 @@ class ExpressivePlanner:
 
             # compute last position
             if not task.is_wait():
-                last_position = RobotState()
+                last_position = moveit_msgs.msg.RobotState()
                 last_position.joint_state.position = task.get_last_joint_state()
                 last_position.joint_state.name = self.robot.get_group(task.target.move_group).get_active_joints()
 
@@ -439,7 +439,7 @@ class ExpressivePlanner:
         joint_state.header.frame_id = self.frame_id
         
         if self.fake_display:
-            display = DisplayRobotState()
+            display = moveit_msgs.msg.DisplayRobotState()
             display.state.joint_state = joint_state
 
         # if not all joint names are used, remove them from the message
@@ -461,3 +461,6 @@ class ExpressivePlanner:
             else:
                 self.publisher.publish(joint_state)
             rate.sleep()
+        
+        # reset trajectory
+        trajectory_planner.done = False

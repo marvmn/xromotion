@@ -46,8 +46,6 @@ class Effect:
         """
         if not target.original_indices:
             target.original_indices = range(len(target.times))
-            
-        print(target.original_indices, self.start_index, self.stop_index)
         
         start_index = target.original_indices[self.start_index]
         if start_index < 0:
