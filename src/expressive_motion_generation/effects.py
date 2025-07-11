@@ -416,8 +416,8 @@ class ExtentEffect(Effect):
                 trajectory_planner.positions[start:stop+1, i] -= np.ones(
                     len(trajectory_planner.positions)) * self.amount * cut
             elif self.configuration[i] == 'g':
-                trajectory_planner.positions[start:stop+1, i] += np.ones(
-                    len(trajectory_planner.positions)) * self.amount * cut - 0.5 * self.amount
+                trajectory_planner.positions[start:stop+1, i] *= np.ones(
+                    len(trajectory_planner.positions)) * self.amount * cut + 1
         
         # 2. DYNAMIC
 
