@@ -305,7 +305,8 @@ class ExtentEffect(Effect):
     """ Extent effect: Modifies the trajectory to follow a wider or narrower path. """
     
     def __init__(self, amount: float, mode_configuration: Iterable[float], 
-                 upper_joint_limits: Iterable[float], lower_joint_limits: Iterable[float]):
+                 upper_joint_limits: Iterable[float], lower_joint_limits: Iterable[float],
+                 start_index=0, stop_index=-1):
         """
         Initialize and calculate transform vector for extent effect.
         
@@ -319,11 +320,15 @@ class ExtentEffect(Effect):
             - <b>'i'</b> <i>(independent)</i>: This joint's value has no influence on the wideness of the robot pose.
         - upper_joint_limits: Upper joint limits, where upper_joint_limits[i] contains the limit for joint i.
         - lower_joint_limits: Upper joint limits, where lower_joint_limits[i] contains the limit for joint i.
+        - start_index: Start index of the effect
+        - stop_index: Stop index of the effect
         """
         self.configuration = mode_configuration
         self.amount = amount
         self.limit_upper = upper_joint_limits
         self.limit_lower = lower_joint_limits
+        self.start_index = start_index
+        self.stop_index = stop_index
     
     def _gcd(self, a: float, b: float, limit: float = 0.0001) :
         """
@@ -388,6 +393,33 @@ class ExtentEffect(Effect):
 
         
     def apply(self, trajectory_planner: Trajectory, animation: Optional[Animation] = None):
+        
+        start, stop = self.get_indices(trajectory_planner)
+        
+        # 1. STATIC
+        # adjust joint states based on mode
+        
+        # create parabola to scale effect down at beginning and end
+        parabola = -0.05 * (trajectory_planner.times[stop] - trajectory_planner.times[start]) \
+            * trajectory_planner.times[start:stop+1] \
+            * (trajectory_planner.times[start:stop+1] - (trajectory_planner.times[stop] - trajectory_planner.times[start]))
+        cut = np.min([np.ones(parabola.shape), parabola], axis=0)
+        
+        # for each joint
+        for i in range(len(trajectory_planner.positions[0])):
+            
+            # check configuration
+            if self.configuration[i] == 'p':
+                trajectory_planner.positions[start:stop+1, i] += np.ones(
+                    len(trajectory_planner.positions)) * self.amount * cut
+            elif self.configuration[i] == 'n':
+                trajectory_planner.positions[start:stop+1, i] -= np.ones(
+                    len(trajectory_planner.positions)) * self.amount * cut
+            elif self.configuration[i] == 'g':
+                trajectory_planner.positions[start:stop+1, i] += np.ones(
+                    len(trajectory_planner.positions)) * self.amount * cut - 0.5 * self.amount
+        
+        # 2. DYNAMIC
 
         # get evenly spaced trajectory
         new_times, new_positions = self._get_regular_spaced_trajectory(trajectory_planner)
@@ -402,12 +434,8 @@ class ExtentEffect(Effect):
 
             low_freqs = np.abs(frequencies) < np.mean(np.abs(frequencies))
 
-            if self.configuration[i] == 'p':
+            if self.configuration[i] != 'i':
                 fourier[low_freqs] += (abs(fourier[low_freqs]) * self.amount)
-            elif self.configuration[i] == 'n':
-                fourier[low_freqs] -= (abs(fourier[low_freqs]) * self.amount)
-            elif self.configuration[i] == 'm':
-                fourier[low_freqs] *= 1 + self.amount
             
             # recompute positions
             new_positions.T[i] = np.fft.ifft(fourier)
