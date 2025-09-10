@@ -19,16 +19,16 @@ class Trajectory:
         - joint_names: List of joint names
         """
         # set true, unmodified times
-        self.true_times = times
+        self.true_times = np.array(times, dtype=float)
 
         # set array with timestamps for the keyframes
-        self.times = copy.deepcopy(times)
+        self.times = copy.deepcopy(self.true_times)
 
         # set true, unmodified positions
-        self.true_positions = positions
+        self.true_positions = np.array(positions, dtype=float)
 
         # set positions that will be modified through expression transforms
-        self.positions = copy.deepcopy(positions)
+        self.positions = copy.deepcopy(self.true_positions)
 
         # indices of original positions in case the trajectory was filled up
         # with interpolated values
@@ -155,21 +155,22 @@ class Trajectory:
         for i in range(len(self.times) - 1):
 
             self.original_indices.append(i + added)
-
-            intervall = self.times[i + 1] - self.times[i]
-
+            
+            interval = self.times[i + 1] - self.times[i]
+            
             # if the intervall between these two timestamps it too big, it doesn't satisfy the rate
             # that means new keyframes need to be inserted.
-            if intervall > 1/frequency:
+            if interval > 1/frequency:
                 
-                j_idx = 0
-                added_now = 0
-                while (j_idx + 1) * 1/frequency < intervall:
-                    new_times = np.insert(new_times, i + j_idx + added + 1, self.times[i] + 1/frequency * (j_idx + 1))
-                    new_positions = np.insert(new_positions, i + j_idx + added + 1, self.get_position_at(new_times[i+j_idx + added + 1]), axis=0)
-                    j_idx += 1
-                    added_now += 1
-                added += added_now
+                insert_times = np.linspace(self.times[i], self.times[i+1],
+                                       int(frequency*interval)+1)[1:-1]
+                
+                for idx, time in enumerate(insert_times):
+                    index = i + added + idx + 1
+                    new_times = np.insert(new_times, index, time)
+                    new_positions = np.insert(new_positions, index, self.get_position_at(time), axis=0)
+                    
+                added += len(insert_times)
         
         # add final index
         self.original_indices.append(added + len(self.times) - 1)
@@ -177,7 +178,7 @@ class Trajectory:
         # finally save new times and positions
         self.positions = new_positions
         self.times = new_times
-
+        
         # return the indices of the original keyframes
         return self.original_indices
 

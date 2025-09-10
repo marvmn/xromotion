@@ -109,7 +109,7 @@ class JitterEffect(Effect):
         trajectory_planner.positions[start:stop+1] += (summands.T * cut).T
 
         # finally, scale down global scale a little
-        trajectory_planner.scale_global_speed(1.0 + min(self.amount / 2, 0.3))
+        # trajectory_planner.scale_global_speed(1.0 + min(self.amount / 2, 0.3))
         return summands, parabola, cut
 
 
@@ -404,7 +404,7 @@ class ExtentEffect(Effect):
             * trajectory_planner.times[start:stop+1] \
             * (trajectory_planner.times[start:stop+1] - (trajectory_planner.times[stop] - trajectory_planner.times[start]))
         cut = np.min([np.ones(parabola.shape), parabola], axis=0)
-        
+        print('ey')
         # for each joint
         for i in range(len(trajectory_planner.positions[0])):
             
@@ -418,7 +418,7 @@ class ExtentEffect(Effect):
             elif self.configuration[i] == 'g':
                 trajectory_planner.positions[start:stop+1, i] *= np.ones(
                     len(trajectory_planner.positions)) * self.amount * cut + 1
-        
+        print('u')
         # 2. DYNAMIC
 
         # get evenly spaced trajectory
@@ -434,7 +434,8 @@ class ExtentEffect(Effect):
 
             low_freqs = np.abs(frequencies) < np.mean(np.abs(frequencies))
 
-            if self.configuration[i] != 'i':
+            if not self.configuration[i] == 'i':
+                print('yeah')
                 fourier[low_freqs] += (abs(fourier[low_freqs]) * self.amount)
             
             # recompute positions
