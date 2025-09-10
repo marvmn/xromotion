@@ -1,7 +1,7 @@
 """ Messages for effects """
 
 import time
-import rospy
+import rclpy
 import numpy as np
 from copy import deepcopy
 from moveit_commander.robot import RobotCommander
@@ -288,7 +288,7 @@ class GazeEffect(Effect):
         convergence = 0
         last_dq = 100
 
-        while not rospy.is_shutdown_requested() and convergence < 10:
+        while not rclpy.is_shutdown_requested() and convergence < 10:
             warmstart_dq = controller.control_step(warmstart_dq)
             dq = np.linalg.norm(warmstart_dq)
             if abs(dq - last_dq) <= 0.000001:

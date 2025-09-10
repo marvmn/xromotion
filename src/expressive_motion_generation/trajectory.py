@@ -1,11 +1,7 @@
 import copy
 import numpy as np
 from typing import Optional
-import tf.transformations as tf
-from sensor_msgs.msg import JointState
 from moveit_commander.robot import RobotCommander
-from moveit_msgs.msg import PositionIKRequest, Constraints, JointConstraint
-from moveit_msgs.srv import GetPositionIKResponse, GetPositionFKRequest, GetPositionFK, GetPositionIK
 
 class Trajectory:
 

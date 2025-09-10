@@ -1,6 +1,8 @@
 import moveit_commander
 import numpy as np
-import rospy
+import threading
+import rclpy
+from rclpy.executors import ExternalShutdownException
 from sensor_msgs.msg import JointState
 import moveit_msgs.msg # import RobotState, DisplayRobotState
 import time
@@ -174,13 +176,17 @@ class ExpressivePlanner:
         self._last_trajectory_planner = None
 
         # initialize ros and moveit
-        rospy.init_node("expressive_planner", anonymous=True)
+        rclpy.init()
+        self.t = threading.Thread(target=self._spin_in_background)
+        self.t.start()
+        self.node = rclpy.create_node("expressive_planner")
+        rclpy.get_global_executor().add_node(self.node)
 
         # initialize publisher
         if fake_display:
-            self.publisher = rospy.Publisher(publish_topic, moveit_msgs.msg.DisplayRobotState, queue_size=10)
+            self.publisher = self.node.create_publisher(moveit_msgs.msg.DisplayRobotState, publish_topic, queue_size=10)
         else:
-            self.publisher = rospy.Publisher(publish_topic, JointState, queue_size=10)
+            self.publisher = self.node.create_publisher(JointState, publish_topic, queue_size=10)
     
     def new_plan(self):
         """
@@ -428,13 +434,23 @@ class ExpressivePlanner:
         # when everything is done, return True
         return True
 
+    def _spin_in_background():
+        """
+        Called by thread to let callbacks run in the background.
+        """
+        executor = rclpy.get_global_executor()
+        try:
+            executor.spin()
+        except ExternalShutdownException:
+            pass
+
     def _execute_trajectory(self, trajectory_planner: Trajectory, original=False):
         """
         Execute the given trajectory planner
         """
         
         # define rate and start time
-        rate = rospy.Rate(30)
+        rate = rclpy.create_rate(30)
         time_start = time.time()
 
         # initialize joint state
@@ -450,10 +466,10 @@ class ExpressivePlanner:
 
 
         # start publishing!
-        while not rospy.is_shutdown() and not trajectory_planner.done:
+        while rclpy.ok() and not trajectory_planner.done:
             
             # set timestamp
-            joint_state.header.stamp = rospy.get_rostime()
+            joint_state.header.stamp = self.node.get_clock().now()
 
             # set joint position
             joint_state.position = trajectory_planner.get_position_at(time.time() - time_start, 
@@ -468,3 +484,7 @@ class ExpressivePlanner:
         
         # reset trajectory
         trajectory_planner.done = False
+
+    def __del__(self):
+        if self.t:
+            self.t.join()

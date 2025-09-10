@@ -17,8 +17,8 @@ A framework for combining task-oriented robot motion with expressive behavior.
 Video demonstrations of the effects are available [here](https://marvmn.github.io/bachelor-thesis-examples/)
 
 ## Dependencies
-- ROS Noetic
-- MoveIt!
+- ROS2 *(Tested on ROS2 Foxy)*
+- MoveIt 2
 - [Stack of Tasks Framework](https://github.com/ubi-agni/stack_of_tasks/)
 
 ## Usage
